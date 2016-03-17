@@ -21,6 +21,11 @@ S3_RETRYABLE_ERRORS = (
     socket.timeout,
     trans.ReadTimeoutError, trans.IncompleteReadError
 )
+try:
+    FileNotFoundError
+except:
+    class FileNotFoundError(IOError):
+        pass
 
 def tokenize(*args, **kwargs):
     """ Deterministic token
@@ -185,7 +190,7 @@ class S3FileSystem(object):
         try:
             files = self._ls(path)
         except ClientError:
-            files = []
+            raise FileNotFoundError(path)
         if path:
             pattern = re.compile(path + '/[^/]*.$')
             files = [f for f in files if pattern.match(f['Key']) is not None]
@@ -193,7 +198,7 @@ class S3FileSystem(object):
                 try:
                     files = [self.info(path)]
                 except (OSError, IOError, ClientError):
-                    files = []
+                    []
         if detail:
             return files
         else:
@@ -208,7 +213,7 @@ class S3FileSystem(object):
         if len(files) == 1:
             return files[0]
         else:
-            raise IOError("File not found: %s" %path)
+            raise FileNotFoundError(path)
 
     def walk(self, path):
         """ Return all entries below path """
@@ -319,7 +324,7 @@ class S3FileSystem(object):
             by `walk()`.
         """
         if not self.exists(path):
-            raise IOError('File does not exist', path)
+            raise FileNotFoundError(path)
         if recursive:
             for f in self.walk(path):
                 self.rm(f, recursive=False)
