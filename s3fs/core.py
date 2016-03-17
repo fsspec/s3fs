@@ -24,7 +24,7 @@ S3_RETRYABLE_ERRORS = (
 try:
     FileNotFoundError
 except:
-    class FileNotFoundError(OSError):
+    class FileNotFoundError(IOError):
         pass
 
 def tokenize(*args, **kwargs):
