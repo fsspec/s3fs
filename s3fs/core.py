@@ -198,7 +198,7 @@ class S3FileSystem(object):
                 try:
                     files = [self.info(path)]
                 except (OSError, IOError, ClientError):
-                    raise FileNotFoundError(path)
+                    []
         if detail:
             return files
         else:

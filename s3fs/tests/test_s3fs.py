@@ -98,7 +98,7 @@ def test_multiple_objects(s3):
 
 
 def test_ls_touch(s3):
-    assert not s3.ls(test_bucket_name+'/tmp/test')
+    s3.ls(test_bucket_name+'/tmp/test')
     s3.touch(a)
     s3.touch(b)
     L = s3.ls(test_bucket_name+'/tmp/test', True)
