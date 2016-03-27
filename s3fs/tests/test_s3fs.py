@@ -148,6 +148,13 @@ def test_readline_empty(s3):
         out = f.readline()
         assert out == b''
 
+def test_iterable(s3):
+    data = b'abc\n123'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a) as f, io.BytesIO(data) as g:
+        for froms3, fromio in zip(f, g):
+            assert froms3 == fromio
 
 def test_tokenize():
     from s3fs.core import tokenize

@@ -687,6 +687,9 @@ class S3File(object):
                 self.s3.s3.put_object(Bucket=self.bucket, Key=self.key)
             self.s3._ls(self.bucket, refresh=True)
 
+    def __iter__(self):
+        return self
+
     def __del__(self):
         self.close()
 
