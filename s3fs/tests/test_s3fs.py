@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import io
+from itertools import chain
 import pytest
 from s3fs.core import S3FileSystem
 from s3fs.utils import seek_delimiter, ignoring, tmpfile
@@ -77,6 +78,75 @@ def test_simple(s3):
         out = f.read(len(data))
         assert len(data) == len(out)
         assert out == data
+
+
+def test_readline(s3):
+    all_items = chain.from_iterable([
+        files.items(), csv_files.items(), text_files.items()
+    ])
+    for k, data in all_items:
+        with s3.open('/'.join([test_bucket_name, k]), 'rb') as f:
+            result = f.readline()
+            expected = data.split(b'\n')[0] + (b'\n' if data.count(b'\n')
+                                               else b'')
+            assert result == expected
+
+def test_readline_from_cache(s3):
+    data = b'a,b\n11,22\n3,4'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+
+    with s3.open(a, 'rb') as f:
+        result = f.readline()
+        assert result == b'a,b\n'
+        assert f.loc == 4
+        assert f.cache == data
+
+        result = f.readline()
+        assert result == b'11,22\n'
+        assert f.loc == 10
+        assert f.cache == data
+
+        result = f.readline()
+        assert result == b'3,4'
+        assert f.loc == 13
+        assert f.cache == data
+
+def test_readline_partial(s3):
+    data = b'aaaaa,bbbbb\n12345,6789\n'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = f.readline(5)
+        assert result == b'aaaaa'
+        result = f.readline(5)
+        assert result == b',bbbb'
+        result = f.readline(5)
+        assert result == b'b\n'
+        result = f.readline()
+        assert result == b'12345,6789\n'
+
+def test_readline_empty(s3):
+    data = b''
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = r.readline()
+        assert result == data
+
+def test_next(s3):
+    expected = csv_files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
+    with s3.open(test_bucket_name + '/2014-01-01.csv') as f:
+        result = next(f)
+        assert result == expected
+
+def test_readline_empty(s3):
+    data = b''
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        out = f.readline()
+        assert out == b''
 
 
 def test_tokenize():

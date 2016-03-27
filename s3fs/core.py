@@ -565,6 +565,11 @@ class S3File(object):
             self.end = end + self.blocksize
             self.cache = self.cache + new
 
+    def next(self):
+        return self.readline()
+
+    __next__ = next
+
     def read(self, length=-1):
         """
         Return data from cache, or fetch pieces as necessary
@@ -580,6 +585,36 @@ class S3File(object):
                          self.loc - self.start + length]
         self.loc += len(out)
         return out
+
+    def readline(self, length=-1):
+        '''
+        Read and return a line from the stream.
+
+        If size is specified, at most size bytes will be read.
+        '''
+        readlength = length if length >= 0 else self.blocksize
+        if length == 0:
+            return b''
+        # +1 to include b'\n'
+        maybe_break = self.cache[self.loc:self.loc + readlength].find(b'\n') + 1
+        if maybe_break >= 1:
+            # Found in cache
+            retval = self.cache[self.loc:self.loc + maybe_break]
+            self.loc += min(self.size - self.loc, maybe_break)
+            return retval
+        elif length > 0 and length <= len(self.cache) - self.loc:
+            # searched area is not to end of cache
+            retval = self.cache[self.loc:self.loc + length]
+            self.loc += length
+            return retval
+        elif len(self.cache) == self.size:
+            # reached end of file
+            retval = self.cache[self.loc:self.size]
+            self.loc = self.size
+            return retval
+        # else not in cache and more to fetch
+        self._fetch(self.loc, self.loc + readlength)
+        return self.readline(length)
 
     def write(self, data):
         """
