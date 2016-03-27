@@ -592,7 +592,11 @@ class S3File(object):
 
         If size is specified, at most size bytes will be read.
         '''
-        readlength = length if length >= 0 else self.blocksize
+        if length >= 0:
+            readlength = length
+        else:
+            readlength = min(self.size - self.loc,
+                             len(self.cache) + self.blocksize)
         if length == 0:
             return b''
         # +1 to include b'\n'
@@ -602,7 +606,7 @@ class S3File(object):
             retval = self.cache[self.loc:self.loc + maybe_break]
             self.loc += min(self.size - self.loc, maybe_break)
             return retval
-        elif length > 0 and length <= len(self.cache) - self.loc:
+        elif 0 < length <= len(self.cache) - self.loc:
             # searched area is not to end of cache
             retval = self.cache[self.loc:self.loc + length]
             self.loc += length
@@ -617,7 +621,7 @@ class S3File(object):
         return self.readline(length)
 
     def write(self, data):
-        """
+        """https://github.com/TomAugspurger/s3fs
         Write data to buffer.
 
         Buffer only sent to S3 on flush() or if buffer is bigger than blocksize.
@@ -687,9 +691,6 @@ class S3File(object):
                 self.s3.s3.put_object(Bucket=self.bucket, Key=self.key)
             self.s3._ls(self.bucket, refresh=True)
 
-    def __iter__(self):
-        return self
-
     def __del__(self):
         self.close()
 
@@ -697,6 +698,9 @@ class S3File(object):
         return "<S3File %s/%s>" % (self.bucket, self.key)
 
     __repr__ = __str__
+
+    def __iter__(self):
+        return self
 
     def __enter__(self):
         return self

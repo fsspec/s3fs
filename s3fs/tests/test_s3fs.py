@@ -131,22 +131,31 @@ def test_readline_empty(s3):
     with s3.open(a, 'wb') as f:
         f.write(data)
     with s3.open(a, 'rb') as f:
-        result = r.readline()
+        result = f.readline()
         assert result == data
+
+def test_readline_blocksize(s3):
+    data = b'ab\n' + b'a' * (10 * 2**20) + b'\nab'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = f.readline()
+        expected = b'ab\n'
+        assert result == expected
+
+        result = f.readline()
+        expected = b'a' * (10 * 2**20) + b'\n'
+        assert result == expected
+
+        result = f.readline()
+        expected = b'ab'
+
 
 def test_next(s3):
     expected = csv_files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
     with s3.open(test_bucket_name + '/2014-01-01.csv') as f:
         result = next(f)
         assert result == expected
-
-def test_readline_empty(s3):
-    data = b''
-    with s3.open(a, 'wb') as f:
-        f.write(data)
-    with s3.open(a, 'rb') as f:
-        out = f.readline()
-        assert out == b''
 
 def test_iterable(s3):
     data = b'abc\n123'
