@@ -499,3 +499,26 @@ def test_write_blocks(s3):
         f.write(b'a' * 15*2**20)
         assert f.buffer.tell() == 0
     assert s3.info(test_bucket_name+'/temp')['Size'] == 15*2**20
+
+
+def test_readable(s3):
+    with s3.open(a, 'wb') as f:
+        assert not f.readable()
+
+    with s3.open(a, 'rb') as f:
+        assert f.readable()
+
+
+def test_seekable(s3):
+    with s3.open(a, 'wb') as f:
+        assert not f.seekable()
+
+    with s3.open(a, 'rb') as f:
+        assert f.seekable()
+
+def test_writable(s3):
+    with s3.open(a, 'wb') as f:
+        assert f.writable()
+
+    with s3.open(a, 'rb') as f:
+        assert not f.writable()

@@ -503,6 +503,7 @@ class S3File(object):
         self.start = None
         self.end = None
         self.closed = False
+        self._mode = mode
         if mode == 'wb':
             self.buffer = io.BytesIO()
             self.parts = []
@@ -519,6 +520,18 @@ class S3File(object):
                 self.size = self.info()['Size']
             except ClientError:
                 raise IOError("File not accessible", path)
+
+    def readable(self):
+        '''Return whether the S3File was opened for reading'''
+        return self.mode == 'rb'
+
+    def seekable(self):
+        '''Return whether the S3File is seekable (only in read mode)'''
+        return self.readable()
+
+    def writable(self):
+        '''Return whether the S3File was opened for writing'''
+        return self.mode == 'wb'
 
     def info(self):
         """ File information about this path """
