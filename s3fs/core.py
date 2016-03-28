@@ -503,6 +503,7 @@ class S3File(object):
         self.start = None
         self.end = None
         self.closed = False
+        self._mode = mode
         if mode == 'wb':
             self.buffer = io.BytesIO()
             self.parts = []
@@ -519,6 +520,18 @@ class S3File(object):
                 self.size = self.info()['Size']
             except ClientError:
                 raise IOError("File not accessible", path)
+
+    def readable(self):
+        '''Return whether the S3File was opened for reading'''
+        return self.mode == 'rb'
+
+    def seekable(self):
+        '''Return whether the S3File is seekable (only in read mode)'''
+        return self.readable()
+
+    def writable(self):
+        '''Return whether the S3File was opened for writing'''
+        return self.mode == 'wb'
 
     def info(self):
         """ File information about this path """
@@ -565,6 +578,11 @@ class S3File(object):
             self.end = end + self.blocksize
             self.cache = self.cache + new
 
+    def next(self):
+        return self.readline()
+
+    __next__ = next
+
     def read(self, length=-1):
         """
         Return data from cache, or fetch pieces as necessary
@@ -581,8 +599,42 @@ class S3File(object):
         self.loc += len(out)
         return out
 
+    def readline(self, length=-1):
+        '''
+        Read and return a line from the stream.
+
+        If size is specified, at most size bytes will be read.
+        '''
+        if length >= 0:
+            readlength = length
+        else:
+            readlength = min(self.size - self.loc,
+                             len(self.cache) + self.blocksize)
+        if length == 0:
+            return b''
+        # +1 to include b'\n'
+        maybe_break = self.cache[self.loc:self.loc + readlength].find(b'\n') + 1
+        if maybe_break >= 1:
+            # Found in cache
+            retval = self.cache[self.loc:self.loc + maybe_break]
+            self.loc += min(self.size - self.loc, maybe_break)
+            return retval
+        elif 0 < length <= len(self.cache) - self.loc:
+            # searched area is not to end of cache
+            retval = self.cache[self.loc:self.loc + length]
+            self.loc += length
+            return retval
+        elif len(self.cache) == self.size:
+            # reached end of file
+            retval = self.cache[self.loc:self.size]
+            self.loc = self.size
+            return retval
+        # else not in cache and more to fetch
+        self._fetch(self.loc, self.loc + readlength)
+        return self.readline(length)
+
     def write(self, data):
-        """
+        """https://github.com/TomAugspurger/s3fs
         Write data to buffer.
 
         Buffer only sent to S3 on flush() or if buffer is bigger than blocksize.
@@ -659,6 +711,9 @@ class S3File(object):
         return "<S3File %s/%s>" % (self.bucket, self.key)
 
     __repr__ = __str__
+
+    def __iter__(self):
+        return self
 
     def __enter__(self):
         return self

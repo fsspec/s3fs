@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import io
+from itertools import chain
 import pytest
 from s3fs.core import S3FileSystem
 from s3fs.utils import seek_delimiter, ignoring, tmpfile
@@ -78,6 +79,91 @@ def test_simple(s3):
         assert len(data) == len(out)
         assert out == data
 
+
+def test_readline(s3):
+    all_items = chain.from_iterable([
+        files.items(), csv_files.items(), text_files.items()
+    ])
+    for k, data in all_items:
+        with s3.open('/'.join([test_bucket_name, k]), 'rb') as f:
+            result = f.readline()
+            expected = data.split(b'\n')[0] + (b'\n' if data.count(b'\n')
+                                               else b'')
+            assert result == expected
+
+def test_readline_from_cache(s3):
+    data = b'a,b\n11,22\n3,4'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+
+    with s3.open(a, 'rb') as f:
+        result = f.readline()
+        assert result == b'a,b\n'
+        assert f.loc == 4
+        assert f.cache == data
+
+        result = f.readline()
+        assert result == b'11,22\n'
+        assert f.loc == 10
+        assert f.cache == data
+
+        result = f.readline()
+        assert result == b'3,4'
+        assert f.loc == 13
+        assert f.cache == data
+
+def test_readline_partial(s3):
+    data = b'aaaaa,bbbbb\n12345,6789\n'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = f.readline(5)
+        assert result == b'aaaaa'
+        result = f.readline(5)
+        assert result == b',bbbb'
+        result = f.readline(5)
+        assert result == b'b\n'
+        result = f.readline()
+        assert result == b'12345,6789\n'
+
+def test_readline_empty(s3):
+    data = b''
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = f.readline()
+        assert result == data
+
+def test_readline_blocksize(s3):
+    data = b'ab\n' + b'a' * (10 * 2**20) + b'\nab'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a, 'rb') as f:
+        result = f.readline()
+        expected = b'ab\n'
+        assert result == expected
+
+        result = f.readline()
+        expected = b'a' * (10 * 2**20) + b'\n'
+        assert result == expected
+
+        result = f.readline()
+        expected = b'ab'
+
+
+def test_next(s3):
+    expected = csv_files['2014-01-01.csv'].split(b'\n')[0] + b'\n'
+    with s3.open(test_bucket_name + '/2014-01-01.csv') as f:
+        result = next(f)
+        assert result == expected
+
+def test_iterable(s3):
+    data = b'abc\n123'
+    with s3.open(a, 'wb') as f:
+        f.write(data)
+    with s3.open(a) as f, io.BytesIO(data) as g:
+        for froms3, fromio in zip(f, g):
+            assert froms3 == fromio
 
 def test_tokenize():
     from s3fs.core import tokenize
@@ -413,3 +499,26 @@ def test_write_blocks(s3):
         f.write(b'a' * 15*2**20)
         assert f.buffer.tell() == 0
     assert s3.info(test_bucket_name+'/temp')['Size'] == 15*2**20
+
+
+def test_readable(s3):
+    with s3.open(a, 'wb') as f:
+        assert not f.readable()
+
+    with s3.open(a, 'rb') as f:
+        assert f.readable()
+
+
+def test_seekable(s3):
+    with s3.open(a, 'wb') as f:
+        assert not f.seekable()
+
+    with s3.open(a, 'rb') as f:
+        assert f.seekable()
+
+def test_writable(s3):
+    with s3.open(a, 'wb') as f:
+        assert f.writable()
+
+    with s3.open(a, 'rb') as f:
+        assert not f.writable()
