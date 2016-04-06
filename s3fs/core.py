@@ -9,7 +9,7 @@ from contextlib import contextmanager
 import boto3
 import boto3.compat
 import boto3.s3.transfer as trans
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ParamValidationError
 from botocore.client import Config
 
 from .utils import read_block
@@ -258,12 +258,14 @@ class S3FileSystem(object):
         if path.startswith('s3://'):
             path = path[len('s3://'):]
         path = path.rstrip('/')
-        files = self._ls(path)
-        files = [f for f in files if f['Key'].rstrip('/') == path]
-        if len(files) == 1:
-            return files[0]
-        else:
-            raise IOError("File not found: %s" %path)
+        bucket, key = split_path(path)
+        try:
+            info = self.s3.head_object(Bucket=bucket, Key=key)
+            info['Size'] = info['ContentLength']
+            info['Key'] = '/'.join([bucket, key])
+            return info
+        except (ClientError, ParamValidationError):
+            raise IOError("File not found: %s" % path)
 
     def walk(self, path):
         """ Return all entries below path """
