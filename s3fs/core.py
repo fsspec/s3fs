@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import io
 import logging
+import os
 import re
 import socket
-import threading
 from hashlib import md5
 
 import boto3
@@ -138,10 +138,9 @@ class S3FileSystem(object):
         anon, key, secret, kwargs, token, ssl = (self.anon, self.key,
                             self.secret, self.kwargs, self.token, self.use_ssl)
 
-        # Include the current thread ID in the connection key so that different
-        # SSL connections are made for each process or thread.
-        tok = tokenize(anon, key, secret, kwargs, token, ssl,
-                       threading.get_ident())
+        # Include the current PID in the connection key so that different
+        # SSL connections are made for each process.
+        tok = tokenize(anon, key, secret, kwargs, token, ssl, os.getpid())
         if refresh:
             self._conn.pop(tok, None)
         logger.debug("Open S3 connection.  Anonymous: %s", self.anon)
