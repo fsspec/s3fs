@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from concurrent.futures import ProcessPoolExecutor
 import io
 import pytest
 from itertools import chain
@@ -661,3 +662,14 @@ def test_array(s3):
     with s3.open(a, 'rb') as f:
         out = f.read()
         assert out == b'A' * 1000
+
+
+def _get_s3_id(s3):
+        return id(s3.connect())
+
+
+def test_no_connection_sharing_among_processes(s3):
+    executor = ProcessPoolExecutor()
+    conn_id = executor.submit(_get_s3_id, s3).result()
+    assert id(s3.connect()) != conn_id, \
+        "Processes should not share S3 connections."
