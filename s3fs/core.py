@@ -8,7 +8,6 @@ from hashlib import md5
 
 import boto3
 import boto3.compat
-import boto3.s3.transfer as trans
 from botocore.exceptions import ClientError, ParamValidationError
 from botocore.client import Config
 
@@ -18,10 +17,14 @@ logger = logging.getLogger(__name__)
 
 logging.getLogger('boto3').setLevel(logging.WARNING)
 logging.getLogger('botocore').setLevel(logging.WARNING)
-S3_RETRYABLE_ERRORS = (
-    socket.timeout,
-    trans.ReadTimeoutError, trans.IncompleteReadError
-)
+
+try:
+    from boto3.s3.transfer import S3_RETRYABLE_ERRORS
+except ImportError:
+    S3_RETRYABLE_ERRORS = (
+        socket.timeout,
+    )
+
 try:
     FileNotFoundError
 except NameError:
