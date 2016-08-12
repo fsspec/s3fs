@@ -693,6 +693,8 @@ class S3File(object):
         self.mode = mode
         if mode not in {'rb', 'wb', 'ab'}:
             raise NotImplementedError("File mode must be {'rb', 'wb', 'ab'}, not %s" % mode)
+        if path.startswith('s3://'):
+            path = path[len('s3://'):]
         self.path = path
         bucket, key = split_path(path)
         self.s3 = s3

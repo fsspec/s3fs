@@ -733,3 +733,13 @@ def test_public_file(s3):
     finally:
         s3.rm(test_bucket_name, recursive=True)
         s3.rm(other_bucket_name, recursive=True)
+
+
+def test_upload_with_s3fs_prefix(s3):
+    path = 's3://test/prefix/key'
+
+    with s3.open(path, 'wb') as f:
+        f.write(b'a' * (10 * 2 ** 20))
+
+    with s3.open(path, 'ab') as f:
+        f.write(b'b' * (10 * 2 ** 20))
