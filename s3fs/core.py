@@ -1038,4 +1038,9 @@ def _fetch_range(client, bucket, key, start, end, max_attempts=10):
                 return b''
             else:
                 raise
+        except Exception as e:
+            if 'time' in str(e).lower():  # Actual exception type changes often
+                continue
+            else:
+                raise
     raise RuntimeError("Max number of S3 retries exceeded")
