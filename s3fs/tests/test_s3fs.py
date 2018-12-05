@@ -1078,6 +1078,19 @@ def test_text_io__override_encoding(s3):
         assert fd.read() == u'Hello, World!'
 
 
+def test_cat__as_text(s3):
+    s3.mkdir('bucket')
+    with s3.open('bucket/file.txt', 'w', encoding='utf-8') as fd:
+        fd.write(u'something')
+
+    assert s3.cat('bucket/file.txt', mode='r') == u'Hello, World!'
+
+
+def test_cat__wrong_mode_crashes(s3):
+    with pytest.raises(ValueError, match="Invalid I/O mode: 'wb'"):
+        s3.cat('bucket/file.txt', mode='wb')
+
+
 def test_readinto(s3):
     s3.mkdir('bucket')
 

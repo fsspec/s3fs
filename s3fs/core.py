@@ -752,7 +752,11 @@ class S3FileSystem(object):
 
     def cat(self, path, **kwargs):
         """ Returns contents of file """
-        with self.open(path, 'rb', **kwargs) as f:
+        kwargs.setdefault('mode', 'rb')
+        if kwargs['mode'] not in ('r', 'rb'):
+            raise ValueError('Invalid I/O mode: %(mode)r' % kwargs)
+
+        with self.open(path, **kwargs) as f:
             return f.read()
 
     def tail(self, path, size=1024, **kwargs):
