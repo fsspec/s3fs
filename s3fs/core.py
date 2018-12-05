@@ -750,13 +750,24 @@ class S3FileSystem(object):
         else:
             return True
 
-    def cat(self, path, **kwargs):
-        """ Returns contents of file """
-        kwargs.setdefault('mode', 'rb')
-        if kwargs['mode'] not in ('r', 'rb'):
-            raise ValueError('Invalid I/O mode: %(mode)r' % kwargs)
+    def cat(self, path, as_text=False, **kwargs):
+        """ Returns contents of the file.
 
-        with self.open(path, **kwargs) as f:
+        Parameters
+        ----------
+        path : string
+            The file to get the contents of.
+        as_text : bool (=False)
+            Return the contents of the file as text instead of bytes. The
+            presence of the ``encoding`` keyword argument forces this to True.
+        kwargs:
+            Additional arguments to pass to open().
+        """
+        if 'encoding' in kwargs:
+            as_text = True
+
+        mode = 'r' if as_text else 'rb'
+        with self.open(path, mode, **kwargs) as f:
             return f.read()
 
     def tail(self, path, size=1024, **kwargs):

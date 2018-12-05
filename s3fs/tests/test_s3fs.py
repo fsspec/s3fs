@@ -1081,26 +1081,28 @@ def test_text_io__override_encoding(s3):
 def test_cat__basic_text(s3):
     """cat() should support text mode."""
     s3.mkdir('bucket')
-    with s3.open('bucket/file.txt', 'w', encoding='utf-8') as fd:
+    with s3.open('bucket/file.txt', 'w') as fd:
         fd.write(u'something')
 
-    assert s3.cat('bucket/file.txt', mode='r', encoding='utf-8') == u'something'
+    assert s3.cat('bucket/file.txt', as_text=True) == u'something'
+
+
+def test_cat__encoding_implies_text(s3):
+    """The encoding kwarg implies as_text = True."""
+    s3.mkdir('bucket')
+    with s3.open('bucket/file.txt', 'w', encoding='ibm500') as fd:
+        fd.write(u'something')
+
+    assert s3.cat('bucket/file.txt', encoding='ibm500') == u'something'
 
 
 def test_cat__binary_ok(s3):
-    """Explicitly passing 'rb' for binary mode should still work."""
+    """Explicitly passing as_text=False for binary mode should still work."""
     s3.mkdir('bucket')
     with s3.open('bucket/file.txt', 'w', encoding='utf-8') as fd:
         fd.write(u'something')
 
-    assert s3.cat('bucket/file.txt', mode='rb') == b'something'
-
-
-def test_cat__wrong_mode_crashes(s3):
-    """Avoid accidental overwrites by checking the file mode before opening."""
-    with pytest.raises(ValueError, match="Invalid I/O mode: 'wb'"):
-        s3.cat('bucket/file.txt', mode='wb')
-
+    assert s3.cat('bucket/file.txt', as_text=False) == b'something'
 
 def test_readinto(s3):
     s3.mkdir('bucket')
