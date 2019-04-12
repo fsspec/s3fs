@@ -6,6 +6,8 @@ import logging
 import os
 import re
 import socket
+import tempfile
+import mmap
 from hashlib import md5
 
 import boto3
@@ -302,7 +304,7 @@ class S3FileSystem(object):
         self._kwargs_helper = ParamKwargsHelper(self.s3)
 
     def open(self, path, mode='rb', block_size=None, acl='', version_id=None,
-             fill_cache=None, encoding=None, **kwargs):
+             fill_cache=None, encoding=None, file_backed_cache=False, **kwargs):
         """ Open a file for reading or writing
 
         Parameters
@@ -347,6 +349,7 @@ class S3FileSystem(object):
         mode2 = mode if 'b' in mode else (mode.replace('t', '') + 'b')
         fdesc = S3File(self, path, mode2, block_size=block_size, acl=acl,
                        version_id=version_id, fill_cache=fill_cache,
+                       file_backed_cache=file_backed_cache,
                        s3_additional_kwargs=kw)
         if 'b' in mode:
             return fdesc
@@ -1145,7 +1148,8 @@ class S3File(object):
     """
 
     def __init__(self, s3, path, mode='rb', block_size=5 * 2 ** 20, acl="",
-                 version_id=None, fill_cache=True, s3_additional_kwargs=None):
+                 version_id=None, fill_cache=True, file_backed_cache=False,
+                 s3_additional_kwargs=None):
         self.mode = mode
         if mode not in {'rb', 'wb', 'ab'}:
             raise NotImplementedError("File mode must be {'rb', 'wb', 'ab'}, "
@@ -1163,7 +1167,8 @@ class S3File(object):
         self.start = None
         self.end = None
         self.closed = False
-        self.trim = True
+        self.file_backed_cache = file_backed_cache
+        self.trim = not file_backed_cache
         self.mpu = None
         self.version_id = version_id
         self.acl = acl
@@ -1209,6 +1214,16 @@ class S3File(object):
                     self.version_id = info.get('VersionId')
             except (ClientError, ParamValidationError) as e:
                 raise_from(IOError("File not accessible", path), e)
+                if self.file_backed_cache:
+                    fd = tempfile.TemporaryFile()
+                    fd.seek(self.size - 1)
+                    fd.write(b'1')
+                    fd.flush()
+                    f_no = fd.fileno()
+                    self.start = 0
+                    self.end = self.size
+                    self.cache = mmap.mmap(f_no, self.size)
+                    self.file_backed_cache_id = set([])
 
     def _call_s3(self, method, *kwarglist, **kwargs):
         return self.s3._call_s3(method, self.s3_additional_kwargs, *kwarglist,
@@ -1296,6 +1311,8 @@ class S3File(object):
 
         If length is specified, at most size bytes will be read.
         """
+        if self.file_backed_cache:
+            raise ValueError('readline not available in file backed cache mode')
         self._fetch(self.loc, self.loc + 1)
         while True:
             found = self.cache[self.loc - self.start:].find(b'\n') + 1
@@ -1322,7 +1339,7 @@ class S3File(object):
         """ Return all lines in a file as a list """
         return list(self)
 
-    def _fetch(self, start, end):
+    def _not_file_backed_cache_fetch(self, start, end):
         # if we have not enabled version_aware then we should use the
         # latest version.
         if self.s3.version_aware:
@@ -1339,7 +1356,7 @@ class S3File(object):
         if start < self.start:
             if not self.fill_cache and end + self.blocksize < self.start:
                 self.start, self.end = None, None
-                return self._fetch(start, end)
+                return self._not_file_backed_cache_fetch(start, end)
             new = _fetch_range(self.s3.s3, self.bucket, self.key, version_id,
                                start, self.start, req_kw=self.s3.req_kw)
             self.start = start
@@ -1349,12 +1366,36 @@ class S3File(object):
                 return
             if not self.fill_cache and start > self.end:
                 self.start, self.end = None, None
-                return self._fetch(start, end)
+                return self._not_file_backed_cache_fetch(start, end)
             new = _fetch_range(self.s3.s3, self.bucket, self.key, version_id,
                                self.end, end + self.blocksize,
                                req_kw=self.s3.req_kw)
             self.end = end + self.blocksize
             self.cache = self.cache + new
+
+    def _file_backed_cache_fetch(self, start, end):
+        if self.s3.version_aware:
+            version_id = self.version_id
+        else:
+            version_id = None
+        if end > self.end:
+            end = self.end
+        start_block = start // self.blocksize
+        end_block = end // self.blocksize
+        for i in range(start_block, end_block + 1):
+            if i not in self.file_backed_cache_id:
+                offset = i * self.blocksize
+                data = _fetch_range(self.s3.s3, self.bucket, self.key, version_id,
+                                    offset, offset + self.blocksize,
+                                    req_kw=self.s3.req_kw)
+                self.cache[offset:offset + len(data)] = data
+                self.file_backed_cache_id.add(i)
+
+    def _fetch(self, start, end):
+        if self.file_backed_cache:
+            self._file_backed_cache_fetch(start, end)
+        else:
+            self._not_file_backed_cache_fetch(start, end)
 
     def read(self, length=-1):
         """
@@ -1475,7 +1516,12 @@ class S3File(object):
         """
         if self.closed:
             return
-        self.cache = None
+
+        if self.file_backed_cache:
+            self.cache.close()
+        else:
+            self.cache = None
+
         if self.writable():
             if self.parts:
                 self.flush(force=True)
