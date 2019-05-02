@@ -328,6 +328,8 @@ class S3FileSystem(object):
         encoding : str
             The encoding to use if opening the file in text mode. The platform's
             default text encoding is used if not given.
+        errors : str
+            The error setting of the decoder or encoder
         kwargs: dict-like
             Additional parameters used for s3 methods.  Typically used for
             ServerSideEncryption.
