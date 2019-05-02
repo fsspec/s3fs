@@ -302,7 +302,7 @@ class S3FileSystem(object):
         self._kwargs_helper = ParamKwargsHelper(self.s3)
 
     def open(self, path, mode='rb', block_size=None, acl='', version_id=None,
-             fill_cache=None, encoding=None, **kwargs):
+             fill_cache=None, encoding=None, errors=None, **kwargs):
         """ Open a file for reading or writing
 
         Parameters
@@ -350,7 +350,7 @@ class S3FileSystem(object):
                        s3_additional_kwargs=kw)
         if 'b' in mode:
             return fdesc
-        return io.TextIOWrapper(fdesc, encoding=encoding)
+        return io.TextIOWrapper(fdesc, encoding=encoding, errors=errors)
 
     def _lsdir(self, path, refresh=False, max_items=None):
         if path.startswith('s3://'):
