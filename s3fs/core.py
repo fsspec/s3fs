@@ -1341,7 +1341,8 @@ class S3File(object):
                                       version_id, start, self.end,
                                       req_kw=self.s3.req_kw)
         if start < self.start:
-            if not self.fill_cache and end + self.blocksize < self.start:
+            if ((not self.fill_cache and end + self.blocksize < self.start)
+                    or start + self.blocksize < self.start):
                 self.start, self.end = None, None
                 return self._fetch(start, end)
             new = _fetch_range(self.s3.s3, self.bucket, self.key, version_id,
@@ -1351,7 +1352,8 @@ class S3File(object):
         if end > self.end:
             if self.end > self.size:
                 return
-            if not self.fill_cache and start > self.end:
+            if ((not self.fill_cache and start > self.end)
+                    or self.end + self.blocksize < end):
                 self.start, self.end = None, None
                 return self._fetch(start, end)
             new = _fetch_range(self.s3.s3, self.bucket, self.key, version_id,
