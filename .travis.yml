@@ -29,7 +29,6 @@ install:
   - export AWS_SECRET_ACCESS_KEY=foobar_secret
   - conda install boto3 botocore httpretty moto six pytest mock -c conda-forge -y
   - pip install git+https://github.com/intake/filesystem_spec/ --no-deps
-  - pip install -r test_requirements.txt
 
 script:
   - py.test -vv s3fs
