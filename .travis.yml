@@ -22,7 +22,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
 
   # Install dependencies
-  - conda create -n test python=$PYVER pip -y
+  - conda create -n test python==$PYVER pip -y
   - source activate test
   - conda install -c conda-forge boto3 botocore httpretty moto "pytest<5" -y
   - export BOTO_CONFIG=/dev/null
