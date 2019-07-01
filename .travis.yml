@@ -4,9 +4,12 @@ language: python
 
 matrix:
   include:
-    - python: 3.5
-    - python: 3.6
-    - python: 3.7
+    - pyver: 3.5
+      language: generic
+    - pyver: 3.6
+      language: generic
+    - pyver: 3.7
+      language: generic
 
 install:
   # Install conda
@@ -16,7 +19,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
 
   # Install dependencies
-  - conda create -n test -c conda-forge python=$TRAVIS_PYTHON_VERSION pip
+  - conda create -n test -c conda-forge python=$PYVER pip
   - source activate test
   - export BOTO_CONFIG=/dev/null
   - export AWS_ACCESS_KEY_ID=foobar_key
