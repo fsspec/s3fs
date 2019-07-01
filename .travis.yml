@@ -4,12 +4,15 @@ language: python
 
 matrix:
   include:
-    - pyver: 3.5
-      language: generic
-    - pyver: 3.6
-      language: generic
-    - pyver: 3.7
-      language: generic
+    - language: generic
+      env:
+        pyver=3.5
+    - language: generic
+      env:
+        pyver=3.6
+    - language: generic
+      env:
+        pyver=3.7
 
 install:
   # Install conda
