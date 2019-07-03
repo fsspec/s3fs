@@ -1208,3 +1208,37 @@ def test_pickle_with_passed_in_session(s3):
     s3 = S3FileSystem(session=session)
     with pytest.raises(NotImplementedError):
         s3.__getstate__()
+
+
+def test_walk__basic(s3):
+    """"""
+    expected = [
+        (
+            test_bucket_name,
+            ['nested', 'test'],
+            ['2014-01-01.csv', '2014-01-02.csv', '2014-01-03.csv', 'file.dat',
+             'filexdat']
+        ),
+        (
+            test_bucket_name + '/nested',
+            ['nested2'],
+            ['file1', 'file2']
+        ),
+        (
+            test_bucket_name + '/nested/nested2',
+            [],
+            ['file1', 'file2'],
+        ),
+        (
+            test_bucket_name + '/test',
+            [],
+            ['accounts.1.json', 'accounts.2.json'],
+        )
+    ]
+
+    for i, (root, dirnames, filenames) in enumerate(s3.walk(test_bucket_name)):
+        assert root == expected[i][0], "Root directory doesn't match."
+        assert dirnames == expected[i][1], \
+            "Directories don't match in %r." % root
+        assert filenames == expected[i][2], \
+            "Filenames don't match in %r." % root

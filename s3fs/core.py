@@ -2,12 +2,14 @@
 from six import raise_from
 import errno
 import logging
+import posixpath
 import socket
 from hashlib import md5
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
 import boto3
+import more_itertools as m_iter
 from botocore.client import Config
 from botocore.exceptions import ClientError, ParamValidationError, BotoCoreError
 
@@ -352,6 +354,38 @@ class S3FileSystem(AbstractFileSystem):
 
             self.dircache[path] = files
         return self.dircache[path]
+
+    def walk(self, path, maxdepth=3):
+        """The S3 equivalent of os.walk().
+
+        Parameters
+        ----------
+        path: string
+            The absolute path on S3 to begin recursing from.
+
+        maxdepth: int
+            The maximum number of levels to recurse into.
+        """
+        if maxdepth is None:
+            new_maxdepth = None
+        elif maxdepth <= 0:
+            return
+        else:
+            new_maxdepth = maxdepth - 1
+
+        i_files, i_directories = m_iter.partition(
+            (lambda e: e['StorageClass'] == 'DIRECTORY'),
+            self._lsdir(path)
+        )
+
+        directories = sorted(posixpath.basename(e['Key']) for e in i_directories)
+        files = sorted(posixpath.basename(e['Key']) for e in i_files)
+
+        yield path, directories, files
+
+        for name in directories:
+            new_top = posixpath.join(path, name)
+            yield from self.walk(new_top, new_maxdepth)
 
     def mkdir(self, path, acl="", **kwargs):
         path = self._strip_protocol(path).rstrip('/')
@@ -850,10 +884,10 @@ class S3FileSystem(AbstractFileSystem):
         else:
             self.dircache.pop(path, None)
 
-    def walk(self, path, maxdepth=None):
+    def find(self, path, maxdepth=None):
         if path in ['', '*', 's3://']:
             raise ValueError('Cannot crawl all of S3')
-        return super().walk(path, maxdepth=maxdepth)
+        return super().find(path, maxdepth=maxdepth)
 
 
 class S3File(AbstractBufferedFile):
