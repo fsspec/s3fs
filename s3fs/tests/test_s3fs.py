@@ -1211,7 +1211,6 @@ def test_pickle_with_passed_in_session(s3):
 
 
 def test_walk__basic(s3):
-    """"""
     expected = [
         (
             test_bucket_name,
@@ -1242,3 +1241,20 @@ def test_walk__basic(s3):
             "Directories don't match in %r." % root
         assert filenames == expected[i][2], \
             "Filenames don't match in %r." % root
+
+
+def test_walk__limit_recursion(s3):
+    result = list(s3.walk(test_bucket_name, 1))
+
+    assert len(result) == 1, 'Wrong number of results: %d != 1' % len(result)
+    assert result[0][0] == test_bucket_name, "Root directory is wrong."
+    assert result[0][1] == ['nested', 'test'], "Directories don't match."
+    assert result[0][2] == [
+        '2014-01-01.csv', '2014-01-02.csv', '2014-01-03.csv', 'file.dat',
+        'filexdat'
+    ], "Files don't match."
+
+
+def test_walk__zero_means_bail(s3):
+    result = list(s3.walk(test_bucket_name, 0))
+    assert not result, 'Wrong number of results: %d != 0' % len(result)
