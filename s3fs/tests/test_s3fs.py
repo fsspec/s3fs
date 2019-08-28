@@ -1338,3 +1338,16 @@ def test_seek_reads(s3):
         size = 17562187
         d3 = f.read(size)
         assert len(d3) == size
+
+
+def test_consistency_check(monkeypatch, s3):
+    from unittest import mock
+
+    monkeypatch.setattr(s3, 'consistency', 'md5')
+    data = b'123'
+
+    fn = test_bucket_name + "/test-consistency"
+
+    with s3.open(fn, "wb") as f:
+        assert f.consistency == "md5"
+        f.write(data)

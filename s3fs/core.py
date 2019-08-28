@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import logging
 import socket
 from hashlib import md5
@@ -113,6 +114,14 @@ class S3FileSystem(AbstractFileSystem):
         Whether to support bucket versioning.  If enable this will require the
         user to have the necessary IAM permissions for dealing with versioned
         objects.
+    consistency : {"md5", "size", "none"}
+        How to validate when writing.
+
+        * 'md5' : compare an MD5 hash of the bytes written and received.
+        * 'size' : verify that the number of bytes received by s3 matches
+          the number of bytes to be written
+        * "none" : no validation
+
     config_kwargs : dict of parameters passed to ``botocore.client.Config``
     kwargs : other parameters for boto3 session
     session : botocore Session object to be used for all connections.
@@ -138,7 +147,9 @@ class S3FileSystem(AbstractFileSystem):
     def __init__(self, anon=False, key=None, secret=None, token=None,
                  use_ssl=True, client_kwargs=None, requester_pays=False,
                  default_block_size=None, default_fill_cache=True,
-                 default_cache_type='bytes', version_aware=False, config_kwargs=None,
+                 default_cache_type='bytes', version_aware=False,
+                 consistency="md5",
+                 config_kwargs=None,
                  s3_additional_kwargs=None, session=None, username=None,
                  password=None, **kwargs):
         if key and username:
@@ -160,6 +171,9 @@ class S3FileSystem(AbstractFileSystem):
         self.secret = secret
         self.token = token
         self.kwargs = kwargs
+        if consistency not in {"none", "size", "md5"}:
+            raise ValueError("'consitency' must be one of 'none', 'size', or 'md5'. Got '{}' instead.".format(consistency))
+        self.consistency = consistency
 
         if client_kwargs is None:
             client_kwargs = {}
@@ -311,7 +325,8 @@ class S3FileSystem(AbstractFileSystem):
         return S3File(self, path, mode, block_size=block_size, acl=acl,
                       version_id=version_id, fill_cache=fill_cache,
                       s3_additional_kwargs=kw, cache_type=cache_type,
-                      autocommit=autocommit)
+                      autocommit=autocommit,
+                      consistency=self.consistency)
 
     def _lsdir(self, path, refresh=False, max_items=None):
         if path.startswith('s3://'):
@@ -905,6 +920,14 @@ class S3File(AbstractBufferedFile):
         Optional version to read the file at.  If not specified this will
         default to the current version of the object.  This is only used for
         reading.
+    consistency : {"md5", "size", "none"}
+        How to validate when writing.
+
+        * 'md5' : compare an MD5 hash of the bytes written and received.
+        * 'size' : verify that the number of bytes received by s3 matches
+          the number of bytes to be written
+        * "none" : no validation
+
 
     Examples
     --------
@@ -923,7 +946,8 @@ class S3File(AbstractBufferedFile):
 
     def __init__(self, s3, path, mode='rb', block_size=5 * 2 ** 20, acl="",
                  version_id=None, fill_cache=True, s3_additional_kwargs=None,
-                 autocommit=True, cache_type='bytes'):
+                 autocommit=True, cache_type='bytes',
+                 consistency="md5"):
         bucket, key = split_path(path)
         if not key:
             raise ValueError('Attempt to open non key-like path: %s' % path)
@@ -935,6 +959,10 @@ class S3File(AbstractBufferedFile):
         self.parts = None
         self.fill_cache = fill_cache
         self.s3_additional_kwargs = s3_additional_kwargs or {}
+
+        if consistency not in {"none", "size", "md5"}:
+            raise ValueError("'consitency' must be one of 'none', 'size', or 'md5'. Got '{}' instead.".format(consistency))
+        self.consistency = consistency
         super().__init__(s3, path, mode, block_size, autocommit=autocommit,
                          cache_type=cache_type)
         self.s3 = self.fs  # compatibility
@@ -948,8 +976,8 @@ class S3File(AbstractBufferedFile):
                 self.size = self.details['size']
             elif self.fs.version_aware:
                 self.version_id = self.details.get('VersionId')
-                # In this case we have not managed to get the VersionId out of details and 
-                # we should invalidate the cache and perform a full head_object since it 
+                # In this case we have not managed to get the VersionId out of details and
+                # we should invalidate the cache and perform a full head_object since it
                 # has likely been partially populated by ls.
                 if self.version_id is None:
                     self.fs.invalidate_cache(self.path)
@@ -1062,14 +1090,23 @@ class S3File(AbstractBufferedFile):
 
             part = len(self.parts) + 1
             logger.debug("Upload chunk %s, %s" % (self, part))
+            if self.consistency == "md5":
+                hasher = md5(data0)
+                checksum = base64.b64encode(hasher.digest()).decode()
+            else:
+                checksum = None
 
             for attempt in range(self.retries + 1):
                 try:
                     out = self._call_s3(
                         self.fs.s3.upload_part,
                         Bucket=bucket,
-                        PartNumber=part, UploadId=self.mpu['UploadId'],
-                        Body=data0, Key=key)
+                        PartNumber=part,
+                        UploadId=self.mpu['UploadId'],
+                        Body=data0,
+                        Key=key,
+                        ContentMD5=checksum
+                    )
                     break
                 except S3_RETRYABLE_ERRORS as exc:
                     if attempt < self.retries:
