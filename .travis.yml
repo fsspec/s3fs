@@ -1,32 +1,17 @@
-sudo: False
+dist: bionic
+language: python
 
-language: generic
-
-matrix:
-  include:
-    - env:
-      - PYVER=3.6
-    - env:
-      - PYVER=3.7
+python:
+  - '3.5'
+  - '3.6'
+  - '3.7'
+  - '3.8'
 
 install:
-  # Install conda
-  - wget http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - conda config --set always_yes yes --set changeps1 no
-
-  # Install dependencies
-  - conda create -n test python=$PYVER pip
-  - source activate test
-  - export BOTO_CONFIG=/dev/null
-  - export AWS_ACCESS_KEY_ID=foobar_key
-  - export AWS_SECRET_ACCESS_KEY=foobar_secret
-  - conda install boto=2.49.0 moto>=1.3.12 pytest -c conda-forge -y
-  - pip install git+https://github.com/intake/filesystem_spec/ --no-deps
+  - pip install tox-travis
 
 script:
-  - py.test -vv s3fs
+  - tox
 
 notifications:
   email: false

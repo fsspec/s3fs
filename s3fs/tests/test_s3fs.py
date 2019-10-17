@@ -1333,7 +1333,7 @@ def test_touch(s3):
 def test_seek_reads(s3):
     fn = test_bucket_name + "/myfile"
     with s3.open(fn, 'wb') as f:
-        f.write(b'a' * 175_627_146)
+        f.write(b'a' * 175627146)
     with s3.open(fn, 'rb', blocksize=100) as f:
         f.seek(175561610)
         d1 = f.read(65536)
