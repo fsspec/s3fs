@@ -1339,3 +1339,13 @@ def test_connect_many():
     pool.close()
     pool.join()
 
+
+def test_requester_pays():
+    fn = test_bucket_name + "/myfile"
+    with moto.mock_s3():
+        s3 = S3FileSystem(requester_pays=True)
+        assert s3.req_kw["RequestPayer"] == "requester"
+        s3.mkdir(test_bucket_name)
+        s3.touch(fn)
+        with s3.open(fn, "rb") as f:
+            assert f.req_kw["RequestPayer"] == "requester"

@@ -256,7 +256,7 @@ class S3FileSystem(AbstractFileSystem):
                 'token': cred['SessionToken'], 'anon': False}
 
     def _open(self, path, mode='rb', block_size=None, acl='', version_id=None,
-              fill_cache=None, cache_type=None, autocommit=True, **kwargs):
+              fill_cache=None, cache_type=None, autocommit=True, requester_pays=None, **kwargs):
         """ Open a file for reading or writing
 
         Parameters
@@ -285,6 +285,9 @@ class S3FileSystem(AbstractFileSystem):
         cache_type : str
             See fsspec's documentation for available cache_type values. Set to "none"
             if no caching is desired. If None, defaults to ``self.default_cache_type``.
+        requester_pays : bool (optional)
+            If RequesterPays buckets are supported.  If None, defaults to the
+            value used when creating the S3FileSystem (which defaults to False.)
         kwargs: dict-like
             Additional parameters used for s3 methods.  Typically used for
             ServerSideEncryption.
@@ -293,6 +296,8 @@ class S3FileSystem(AbstractFileSystem):
             block_size = self.default_block_size
         if fill_cache is None:
             fill_cache = self.default_fill_cache
+        if requester_pays is None:
+            requester_pays = bool(self.req_kw)
 
         acl = acl or self.s3_additional_kwargs.get('ACL', '')
         kw = self.s3_additional_kwargs.copy()
@@ -307,7 +312,7 @@ class S3FileSystem(AbstractFileSystem):
         return S3File(self, path, mode, block_size=block_size, acl=acl,
                       version_id=version_id, fill_cache=fill_cache,
                       s3_additional_kwargs=kw, cache_type=cache_type,
-                      autocommit=autocommit)
+                      autocommit=autocommit, requester_pays=requester_pays)
 
     def _lsdir(self, path, refresh=False, max_items=None):
         if path.startswith('s3://'):
@@ -888,6 +893,8 @@ class S3File(AbstractBufferedFile):
         Optional version to read the file at.  If not specified this will
         default to the current version of the object.  This is only used for
         reading.
+    requester_pays : bool (False)
+        If RequesterPays buckets are supported.
 
     Examples
     --------
@@ -906,7 +913,7 @@ class S3File(AbstractBufferedFile):
 
     def __init__(self, s3, path, mode='rb', block_size=5 * 2 ** 20, acl="",
                  version_id=None, fill_cache=True, s3_additional_kwargs=None,
-                 autocommit=True, cache_type='bytes'):
+                 autocommit=True, cache_type='bytes', requester_pays=False):
         bucket, key = split_path(path)
         if not key:
             raise ValueError('Attempt to open non key-like path: %s' % path)
@@ -920,6 +927,7 @@ class S3File(AbstractBufferedFile):
         self.parts = None
         self.fill_cache = fill_cache
         self.s3_additional_kwargs = s3_additional_kwargs or {}
+        self.req_kw = {'RequestPayer': 'requester'} if requester_pays else {}
         super().__init__(s3, path, mode, block_size, autocommit=autocommit,
                          cache_type=cache_type)
         self.s3 = self.fs  # compatibility
@@ -1024,7 +1032,7 @@ class S3File(AbstractBufferedFile):
         return self.fs.url(self.path, **kwargs)
 
     def _fetch_range(self, start, end):
-        return _fetch_range(self.fs.s3, self.bucket, self.key, self.version_id, start, end)
+        return _fetch_range(self.fs.s3, self.bucket, self.key, self.version_id, start, end, req_kw=self.req_kw)
 
     def _upload_chunk(self, final=False):
         bucket, key = split_path(self.path)
