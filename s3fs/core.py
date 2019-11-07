@@ -496,6 +496,16 @@ class S3FileSystem(AbstractFileSystem):
                 raise ValueError('Failed to head path %r: %s' % (path, e))
         return super().info(path)
 
+    def isdir(self, path):
+        path = self._strip_protocol(path).rstrip("/")
+        bucket, prefix = split_path(path)
+        if prefix:
+            # This should only return files or directories within this path
+            return 0 < len(self._ls(path))
+        else:
+            # Send buckets to super
+            return super(S3FileSystem, self).isdir(path)
+
     def ls(self, path, detail=False, refresh=False, **kwargs):
         """ List single "directory" with or without details
 
