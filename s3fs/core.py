@@ -497,14 +497,29 @@ class S3FileSystem(AbstractFileSystem):
         return super().info(path)
 
     def isdir(self, path):
-        path = self._strip_protocol(path).rstrip("/")
-        bucket, prefix = split_path(path)
-        if prefix:
-            # This should only return files or directories within this path
-            return 0 < len(self._ls(path))
-        else:
-            # Send buckets to super
+        path = self._strip_protocol(path).strip("/")
+        # Send buckets to super
+        if "/" not in path:
             return super(S3FileSystem, self).isdir(path)
+
+        if path in self.dircache:
+            for fp in self.dircache[path]:
+                # For files the dircache can contain itself.
+                # If it contains anything other than itself it is a directory.
+                if fp["name"] != path:
+                    return True
+            return False
+
+        parent = self._parent(path)
+        if parent in self.dircache:
+            for f in self.dircache[parent]:
+                if f["name"] == path:
+                    # If we find ourselves return whether we are a directory
+                    return f["type"] == "directory"
+            return False
+
+        # This only returns things within the path and NOT the path object itself
+        return 0 < len(self._lsdir(path))
 
     def ls(self, path, detail=False, refresh=False, **kwargs):
         """ List single "directory" with or without details
