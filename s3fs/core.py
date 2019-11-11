@@ -519,7 +519,7 @@ class S3FileSystem(AbstractFileSystem):
             return False
 
         # This only returns things within the path and NOT the path object itself
-        return 0 < len(self._lsdir(path))
+        return bool(self._lsdir(path))
 
     def ls(self, path, detail=False, refresh=False, **kwargs):
         """ List single "directory" with or without details
