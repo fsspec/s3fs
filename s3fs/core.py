@@ -3,7 +3,6 @@ import logging
 import os
 import socket
 import time
-from hashlib import md5
 
 from fsspec import AbstractFileSystem
 from fsspec.spec import AbstractBufferedFile
@@ -23,9 +22,6 @@ logger.addHandler(handle)
 if "S3FS_LOGGING_LEVEL" in os.environ:
     logger.setLevel(os.environ["S3FS_LOGGING_LEVEL"])
 
-logging.getLogger('boto3').setLevel(logging.WARNING)
-logging.getLogger('botocore').setLevel(logging.WARNING)
-
 try:
     from boto3.s3.transfer import S3_RETRYABLE_ERRORS
 except ImportError:
@@ -34,17 +30,6 @@ except ImportError:
     )
 
 _VALID_FILE_MODES = {'r', 'w', 'a', 'rb', 'wb', 'ab'}
-
-
-def tokenize(*args, **kwargs):
-    """ Deterministic token
-
-    >>> tokenize('Hello') == tokenize('Hello')
-    True
-    """
-    if kwargs:
-        args += (kwargs,)
-    return md5(str(tuple(args)).encode()).hexdigest()
 
 
 def split_path(path):
@@ -160,8 +145,6 @@ class S3FileSystem(AbstractFileSystem):
         if password:
             secret = password
 
-        if self._cached:
-            return
         self.anon = anon
         self.session = None
         self.passed_in_session = session

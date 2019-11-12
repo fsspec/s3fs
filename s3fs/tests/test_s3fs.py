@@ -9,7 +9,7 @@ import pytest
 from itertools import chain
 import fsspec.core
 from s3fs.core import S3FileSystem
-from s3fs.utils import seek_delimiter, ignoring, SSEParams
+from s3fs.utils import ignoring, SSEParams
 import moto
 import boto3
 from unittest import mock
@@ -163,13 +163,6 @@ def test_client_kwargs():
 def test_config_kwargs():
     s3 = S3FileSystem(config_kwargs={'signature_version': 's3v4'})
     assert s3.connect(refresh=True).meta.config.signature_version == 's3v4'
-
-
-def test_tokenize():
-    from s3fs.core import tokenize
-    a = (1, 2, 3)
-    assert isinstance(tokenize(a), (str, bytes))
-    assert tokenize(a) != tokenize(a, other=1)
 
 
 def test_idempotent_connect(s3):
@@ -676,23 +669,6 @@ def test_read_small(s3):
         assert s3.cat(fn) == b''.join(out)
         # cache drop
         assert len(f.cache) < len(out)
-
-
-def test_seek_delimiter(s3):
-    fn = 'test/accounts.1.json'
-    data = files[fn]
-    with s3.open('/'.join([test_bucket_name, fn])) as f:
-        seek_delimiter(f, b'}', 0)
-        assert f.tell() == 0
-        f.seek(1)
-        seek_delimiter(f, b'}', 5)
-        assert f.tell() == data.index(b'}') + 1
-        seek_delimiter(f, b'\n', 5)
-        assert f.tell() == data.index(b'\n') + 1
-        f.seek(1, 1)
-        ind = data.index(b'\n') + data[data.index(b'\n') + 1:].index(b'\n') + 1
-        seek_delimiter(f, b'\n', 5)
-        assert f.tell() == ind + 1
 
 
 def test_read_s3_block(s3):
