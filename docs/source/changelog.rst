@@ -11,6 +11,7 @@ Version 0.4.0
 - Miscellaneous doc updates (:pr:`252`) by `James Bourbeau`_ 
 - Support for Python 3.8 (:pr:`264`) by `Tom Augspurger`_
 - Improved performance for ``isdir`` (:pr:`259`) by `Nate Yoder`_
+* Increased the minimum required version of fsspec to 0.6.0
 
 .. _`Martin Durant`: https://github.com/martindurant
 .. _`Marius van Niekerk`: https://github.com/mariusvniekerk
