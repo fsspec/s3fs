@@ -464,6 +464,7 @@ class S3FileSystem(AbstractFileSystem):
                     'Size': out['ContentLength'],
                     'size': out['ContentLength'],
                     'path': '/'.join([bucket, key]),
+                    'type': 'file',
                     'StorageClass': "STANDARD",
                     'VersionId': out.get('VersionId')
                 }
