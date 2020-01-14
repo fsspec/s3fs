@@ -1083,6 +1083,7 @@ def test_versions(s3):
         fo.write(b'1')
     with s3.open(versioned_file, 'wb') as fo:
         fo.write(b'2')
+    assert s3.isfile(versioned_file)
     versions = s3.object_version_info(versioned_file)
     version_ids = [version['VersionId'] for version in versions]
     assert len(version_ids) == 2
