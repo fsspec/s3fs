@@ -299,7 +299,7 @@ class S3FileSystem(AbstractFileSystem):
                              in client_kwargs.items() if key not in drop_keys}
             config_kwargs["signature_version"] = UNSIGNED
         conf = Config(**config_kwargs)
-        self.s3 = self.session.create_client('s3', config=conf, **init_kwargs, **self.client_kwargs)
+        self.s3 = self.session.client('s3', config=conf, **init_kwargs, **self.client_kwargs)
         return self.s3
 
     def get_delegated_s3pars(self, exp=3600):
@@ -322,7 +322,7 @@ class S3FileSystem(AbstractFileSystem):
                     'anon': False}
         if self.key is None or self.secret is None:  # automatic credentials
             return {'anon': False}
-        sts = self.session.create_client('sts')
+        sts = self.session.client('sts')
         cred = sts.get_session_token(DurationSeconds=exp)['Credentials']
         return {'key': cred['AccessKeyId'], 'secret': cred['SecretAccessKey'],
                 'token': cred['SessionToken'], 'anon': False}
