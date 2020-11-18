@@ -87,8 +87,7 @@ Async
 -----
 
 ``s3fs`` is implemented using ``aiobotocore``, and offers async functionality.
-A number of methods of ``S3FileSystem`` are ``async``, for for each of these,
-there is also a synchronous version with the same name and lack of a ``_``
+A number of methods of ``S3FileSystem`` have ``async`` equivalents and are designated with a ``_``
 prefix.
 
 If you wish to call ``s3fs`` from async code, then you should pass
