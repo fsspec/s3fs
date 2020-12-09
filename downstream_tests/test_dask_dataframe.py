@@ -139,6 +139,9 @@ def gather_statistics(request):
 def compare_dateframes(actual: pd.DataFrame, expected: pd.DataFrame, columns: List[str], id_column='id'):
     from pandas.testing import assert_frame_equal
 
+    if id_column in columns:
+        columns.remove(id_column)
+
     actual = actual.set_index(id_column)
     expected = expected.set_index(id_column)
 
