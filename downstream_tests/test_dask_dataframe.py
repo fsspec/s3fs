@@ -162,8 +162,7 @@ def test_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_se
     assert 'part_key' in ddf.columns
     actual = ddf.compute().sort_values('id')
     # dask converts our part_key into a categorical
-    actual[:, 'part_key'] = actual[:, 'part_key'].astype(str)
-
+    actual['part_key'] = actual['part_key'].astype(str)
 
     column_names = list(partitioned_dataset["dataframe"].columns)
 
