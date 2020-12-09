@@ -66,6 +66,11 @@ jobs:
       run:
         shell: bash -l {0}
 
+    env:
+      BOTO_CONFIG: /dev/null
+      AWS_ACCESS_KEY_ID: foobar_key
+      AWS_SECRET_ACCESS_KEY: foobar_secret
+
     steps:
       - uses: conda-incubator/setup-miniconda@v2
         with:
@@ -96,6 +101,12 @@ jobs:
         run: |
           pip install git+https://github.com/intake/filesystem_spec/ --no-deps
           pip install --no-deps .
+
+      - name: conda packages
+        run: conda list
+
+      - name: pip freeze
+        run: pip freeze
 
       - name: Run test suite
         run: |
