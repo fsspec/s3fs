@@ -180,4 +180,4 @@ def test_non_partitioned_read(partitioned_dataset, partitioned_parquet_path, mot
     expected = expected.loc[expected.part_key == "A"]
     expected = expected.drop(columns=['part_key'])
 
-    compare_dateframes(actual, partitioned_dataset["dataframe"], expected.column_names)
+    compare_dateframes(actual, expected, list(expected.columns))
