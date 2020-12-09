@@ -52,7 +52,7 @@ jobs:
           flake8 s3fs
           black s3fs --check
 
-  test-downstream: &test-downstream
+  test-downstream:
     name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
