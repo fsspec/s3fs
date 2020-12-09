@@ -9,6 +9,7 @@ import s3fs
 import moto.server
 import sys
 import os
+from typing import List
 
 
 @fixture(scope="session", autouse=True)
@@ -135,6 +136,15 @@ def gather_statistics(request):
     return request.param
 
 
+def compare_dateframes(actual: pd.DataFrame, expected: pd.DataFrame, columns: List[str], id_column='id'):
+    from pandas.testing import assert_frame_equal
+
+    actual = actual.set_index(id_column)
+    expected = expected.set_index(id_column)
+
+    assert_frame_equal(actual.loc[:, columns], expected.loc[:, columns])
+
+
 def test_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_server, parquet_engine, gather_statistics):
     """The directory based reading is quite finicky"""
     storage_options = moto_server.copy()
@@ -149,7 +159,7 @@ def test_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_se
     actual = ddf.compute().sort_values('id')
     column_names = list(partitioned_dataset["dataframe"].columns)
 
-    assert actual.loc[:, column_names] == partitioned_dataset["dataframe"].loc[:, column_names]
+    compare_dateframes(actual, partitioned_dataset["dataframe"], column_names)
 
 
 def test_non_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_server, parquet_engine, gather_statistics):
@@ -162,11 +172,12 @@ def test_non_partitioned_read(partitioned_dataset, partitioned_parquet_path, mot
         engine=parquet_engine
     )
 
-    if parquet_engine == 'pyarrow':
-        assert 'part_key' in ddf.columns
+    # if parquet_engine == 'pyarrow':
+    #     assert 'part_key' in ddf.columns
+
     actual = ddf.compute().sort_values('id')
     expected: pd.DataFrame = partitioned_dataset["dataframe"]
     expected = expected.loc[expected.part_key == "A"]
     expected = expected.drop(columns=['part_key'])
 
-    assert actual == expected
+    compare_dateframes(actual, partitioned_dataset["dataframe"], expected.column_names)

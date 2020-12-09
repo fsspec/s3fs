@@ -113,4 +113,4 @@ jobs:
 
       - name: Run test suite
         run: |
-          pytest -vrsx -ra --color=yes downstream_tests
+          pytest -vrsx -rA --color=yes downstream_tests
