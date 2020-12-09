@@ -131,6 +131,7 @@ def parquet_engine(request):
 @pytest.fixture(scope='session', params=[
     pytest.param(False, id='gather_statistics=F'),
     pytest.param(True, id='gather_statistics=T'),
+    pytest.param(None, id='gather_statistics=None'),
 ])
 def gather_statistics(request):
     return request.param
@@ -145,7 +146,7 @@ def compare_dateframes(actual: pd.DataFrame, expected: pd.DataFrame, columns: Li
     actual = actual.set_index(id_column)
     expected = expected.set_index(id_column)
 
-    assert_frame_equal(actual.loc[:, columns], expected.loc[:, columns])
+    assert_frame_equal(actual.loc[:, columns], expected.loc[:, columns], check_dtype=False)
 
 
 def test_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_server, parquet_engine, gather_statistics):
