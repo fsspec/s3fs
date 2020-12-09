@@ -147,8 +147,9 @@ def test_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_se
 
     assert 'part_key' in ddf.columns
     actual = ddf.compute().sort_values('id')
+    column_names = list(partitioned_dataset["dataframe"].columns)
 
-    assert actual == partitioned_dataset["dataframe"]
+    assert actual.loc[:, column_names] == partitioned_dataset["dataframe"].loc[:, column_names]
 
 
 def test_non_partitioned_read(partitioned_dataset, partitioned_parquet_path, moto_server, parquet_engine, gather_statistics):
