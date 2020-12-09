@@ -83,8 +83,13 @@ jobs:
           mamba install
           -c conda-forge
           'python=${{ matrix.python-version }}'
-          'pyarrow=${{ matrix.pyarrow-version }}'
-          pip botocore aiobotocore moto pytest fastparquet
+          'pyarrow${{ matrix.pyarrow-version }}'
+          pip
+          botocore
+          aiobotocore
+          moto
+          pytest
+          fastparquet
 
       - name: Install portions from source
         run: |
