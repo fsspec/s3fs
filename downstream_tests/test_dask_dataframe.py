@@ -8,14 +8,14 @@ import dask.dataframe as dd
 import s3fs
 import moto.server
 import sys
-import fsspec
+import os
 
 
 @fixture(scope="session", autouse=True)
-def aws_credentials(monkeypatch):
-    monkeypatch.setenv("BOTO_CONFIG", "/dev/null")
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "foobar_key")
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "foobar_secret")
+def aws_credentials():
+    os.environ["BOTO_CONFIG"] = "/dev/null"
+    os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
+    os.environ["AWS_ACCESS_KEY_ID"] = "foobar_secret"
 
 
 @fixture(scope="session")
@@ -41,7 +41,7 @@ def free_port():
 
 
 @fixture(scope="session")
-def moto_server():
+def moto_server(aws_credentials):
     import subprocess
 
     port = free_port()
