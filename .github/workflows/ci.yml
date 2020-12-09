@@ -81,6 +81,10 @@ jobs:
           # we need the tags present
           fetch-depth: 0
 
+      - name: Ensure tags up to date
+        run: >
+          git fetch --tags https://github.com/dask/s3fs.git
+
       - name: Install conda dependencies
         run: >
           mamba install
