@@ -53,7 +53,7 @@ jobs:
           black s3fs --check
 
   test-downstream:
-    name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }} ${{ matrix.pyarrow-version })
+    name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }} ${{ matrix.pyarrow-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
