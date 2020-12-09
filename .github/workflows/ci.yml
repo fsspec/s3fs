@@ -52,7 +52,7 @@ jobs:
           flake8 s3fs
           black s3fs --check
 
-  test-downstream:
+  test-downstream: &test-downstream
     name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -62,11 +62,17 @@ jobs:
         python-version: ["3.7", "3.8"]
         pyarrow-version: [">=1,<2", ">=2,<3"]
 
+    defaults:
+      run:
+        shell: bash -l {0}
+
     steps:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
           python-version: ${{ matrix.python-version }}
+          channels: conda-forge,defaults
+          channel-priority: true
           mamba-version: "*"
 
       - name: Checkout
@@ -74,7 +80,7 @@ jobs:
 
       - name: Install conda dependencies
         run: >
-          mamba create -n test-downstreams
+          mamba install
             -c conda-forge
             'python=${{ matrix.python-version }}'
             'pyarrow=${{ matrix.pyarrow-version }}'
@@ -82,10 +88,8 @@ jobs:
 
       - name: Install portions from source
         run: |
-          conda activate test-downstreams
           pip install git+https://github.com/intake/filesystem_spec/ --no-deps
 
       - name: Run test suite
         run: |
-          conda activate test-downstreams
           pytest -vrsx downstream_tests
