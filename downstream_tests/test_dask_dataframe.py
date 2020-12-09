@@ -165,7 +165,8 @@ def test_non_partitioned_read(partitioned_dataset, partitioned_parquet_path, mot
     if parquet_engine == 'pyarrow':
         assert 'part_key' in ddf.columns
     actual = ddf.compute().sort_values('id')
-    expected = partitioned_dataset["dataframe"]
+    expected: pd.DataFrame = partitioned_dataset["dataframe"]
     expected = expected.loc[expected.part_key == "A"]
+    expected = expected.drop(columns=['part_key'])
 
     assert actual == expected
