@@ -15,7 +15,7 @@ import os
 def aws_credentials():
     os.environ["BOTO_CONFIG"] = "/dev/null"
     os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
-    os.environ["AWS_ACCESS_KEY_ID"] = "foobar_secret"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
 
 
 @fixture(scope="session")
