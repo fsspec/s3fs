@@ -95,6 +95,7 @@ jobs:
       - name: Install portions from source
         run: |
           pip install git+https://github.com/intake/filesystem_spec/ --no-deps
+          pip install --no-deps .
 
       - name: Run test suite
         run: |
