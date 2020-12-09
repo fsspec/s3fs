@@ -53,7 +53,7 @@ jobs:
           black s3fs --check
 
   test-downstream:
-    name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Downstream tests (${{ matrix.python-version }}, ${{ matrix.os }} ${{ pyarrow-version })
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -81,10 +81,10 @@ jobs:
       - name: Install conda dependencies
         run: >
           mamba install
-            -c conda-forge
-            'python=${{ matrix.python-version }}'
-            'pyarrow=${{ matrix.pyarrow-version }}'
-            pip botocore aiobotocore moto pytest fastparquet
+          -c conda-forge
+          'python=${{ matrix.python-version }}'
+          'pyarrow=${{ matrix.pyarrow-version }}'
+          pip botocore aiobotocore moto pytest fastparquet
 
       - name: Install portions from source
         run: |
