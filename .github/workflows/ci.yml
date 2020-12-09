@@ -89,6 +89,7 @@ jobs:
           aiobotocore
           moto
           pytest
+          dask
           fastparquet
 
       - name: Install portions from source
