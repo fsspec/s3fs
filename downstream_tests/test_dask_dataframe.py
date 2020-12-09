@@ -8,6 +8,14 @@ import dask.dataframe as dd
 import s3fs
 import moto.server
 import sys
+import fsspec
+
+
+@fixture(scope="session", autouse=True)
+def aws_credentials(monkeypatch):
+    monkeypatch.setenv("BOTO_CONFIG", "/dev/null")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "foobar_key")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "foobar_secret")
 
 
 @fixture(scope="session")
