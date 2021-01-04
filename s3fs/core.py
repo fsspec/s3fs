@@ -673,10 +673,11 @@ class S3FileSystem(AsyncFileSystem):
         try:
             bucket, key, _ = self.split_path(path)
             if key:
-                # TODO: handle deletion of folder prefix (key) first
+                # handle deletion of folder prefix (key) here
                 # do not just delete bucket in this case
-                print(f'deleting path = {path}, actually deleting bucket = {bucket}')
-            await self.s3.delete_bucket(Bucket=bucket)
+                self.rm(path, recursive=True)
+            else:
+                await self.s3.delete_bucket(Bucket=bucket)
         except botocore.exceptions.ClientError as e:
             if "NoSuchBucket" in str(e):
                 raise FileNotFoundError(path) from e
@@ -915,9 +916,6 @@ class S3FileSystem(AsyncFileSystem):
     async def _info(self, path, bucket=None, key=None, kwargs={}, version_id=None):
         if bucket is None:
             bucket, key, version_id = self.split_path(path)
-
-        if path.endswith("/") and key:
-            key = key.rstrip("/") + "/"
 
         try:
             out = await self._call_s3(
