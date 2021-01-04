@@ -412,23 +412,27 @@ def test_not_delegate():
 
 
 def test_split_path(s3):
-    assert s3.split_path(
-        "s3://mybucket/path/to/directory/"
-    ) == ('mybucket', 'path/to/directory', None)
+    assert s3.split_path("s3://mybucket/path/to/directory/") == (
+        "mybucket",
+        "path/to/directory",
+        None,
+    )
 
-    assert s3.split_path(
-        "s3://mybucket/path/to/file"
-    ) == ('mybucket', 'path/to/file', None)
+    assert s3.split_path("s3://mybucket/path/to/file") == (
+        "mybucket",
+        "path/to/file",
+        None,
+    )
 
     assert s3.split_path(
         "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
-    ) == ('mybucket', 'path/to/versioned_file', None)
+    ) == ("mybucket", "path/to/versioned_file", None)
 
     s3.version_aware = True
 
     assert s3.split_path(
         "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
-    ) == ('mybucket', 'path/to/versioned_file', 'some_version_id')
+    ) == ("mybucket", "path/to/versioned_file", "some_version_id")
 
 
 def test_ls(s3):
@@ -548,7 +552,7 @@ def test_rm(s3):
     assert not s3.exists(a)
     # the API is OK with deleting non-files; maybe this is an effect of using bulk
     with pytest.raises(FileNotFoundError):
-        s3.rm(test_bucket_name + '/nonexistent')
+        s3.rm(test_bucket_name + "/nonexistent")
 
     with pytest.raises(FileNotFoundError):
         s3.rm("nonexistent")
@@ -609,42 +613,38 @@ def test_bulk_delete(s3):
     s3.rm(test_bucket_name, recursive=True)
 
     # delete multiple files and directory
-    s3.mkdir('test/dir1')
+    s3.mkdir("test/dir1")
 
-    s3.touch('test/dir1/a.txt')
-    s3.touch('test/dir1/b.txt')
-    s3.touch('test/dir1/c.txt')
+    s3.touch("test/dir1/a.txt")
+    s3.touch("test/dir1/b.txt")
+    s3.touch("test/dir1/c.txt")
 
-    s3.touch('test/dir2/a.txt')
-    s3.touch('test/dir2/b.txt')
-    s3.touch('test/dir2/c.txt')
+    s3.touch("test/dir2/a.txt")
+    s3.touch("test/dir2/b.txt")
+    s3.touch("test/dir2/c.txt")
 
-    s3.mkdir('test/dir2/dir3')
+    s3.mkdir("test/dir2/dir3")
 
-    s3.makedirs('test/dir5/dir6')
+    s3.makedirs("test/dir5/dir6")
 
-    s3.makedirs('test2/dir7')
+    s3.makedirs("test2/dir7")
 
     # new bucket
-    s3.touch('test2/dir7/something')
+    s3.touch("test2/dir7/something")
 
     # multi-bucket bulk delete
-    s3.rm([
-        'test/dir2/a.txt',
-        'test/dir2/dir3',
-        'test2/dir7/something'
-    ])
-    assert s3.exists('test2')
+    s3.rm(["test/dir2/a.txt", "test/dir2/dir3", "test2/dir7/something"])
+    assert s3.exists("test2")
 
-    assert len(s3.ls('test/dir2')) == 2
+    assert len(s3.ls("test/dir2")) == 2
 
-    s3.rm('test/dir1', recursive=True)
-    assert not s3.exists('test/dir1')
-    assert len(s3.ls('test')) == 2
-    assert len(s3.ls('test/dir2')) == 2
+    s3.rm("test/dir1", recursive=True)
+    assert not s3.exists("test/dir1")
+    assert len(s3.ls("test")) == 2
+    assert len(s3.ls("test/dir2")) == 2
 
-    s3.rm('test', recursive=True)
-    assert not s3.exists('test')
+    s3.rm("test", recursive=True)
+    assert not s3.exists("test")
 
 
 @pytest.mark.xfail(reason="anon user is still priviliged on moto")
@@ -1808,7 +1808,7 @@ def test_via_fsspec(s3):
     # TODO: should this test not connecting to S3?
     #  replace fs.rm with s3.rm
     # Interim: removing the residual local folder `mine`
-    fs = fsspec.filesystem('file')
+    fs = fsspec.filesystem("file")
     fs.rm("mine", recursive=True)
 
 

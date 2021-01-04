@@ -509,11 +509,9 @@ class S3FileSystem(AsyncFileSystem):
                 async for i in it:
                     dircache.extend(i.get("CommonPrefixes", []))
                     for c in i.get("Contents", []):
-                        if c['Key'].endswith('/'):
-                            if c['Key'] != prefix:
-                                dircache.append(
-                                    {'Prefix': c['Key']}
-                                )
+                        if c["Key"].endswith("/"):
+                            if c["Key"] != prefix:
+                                dircache.append({"Prefix": c["Key"]})
                         else:
                             c["type"] = "file"
                             c["size"] = c["Size"]
@@ -568,9 +566,11 @@ class S3FileSystem(AsyncFileSystem):
             try:
                 out = [await self._info(path)]
                 # exclude directories matching as `path` from the list
-                if len(out) == 1 \
-                        and out[0]['type'] == 'directory' \
-                        and out[0]['name'] == path:
+                if (
+                    len(out) == 1
+                    and out[0]["type"] == "directory"
+                    and out[0]["name"] == path
+                ):
                     out = []
             except FileNotFoundError:
                 out = []
@@ -633,14 +633,13 @@ class S3FileSystem(AsyncFileSystem):
         try:
             """
             https://docs.aws.amazon.com/AmazonS3/latest/user-guide/using-folders.html
-            
-            The Amazon S3 console treats all objects that have a 
-            forward slash "/" character as the last (trailing) 
-            character in the key name as a folder, for example 
-            examplekeyname/. You can't upload an object that has a 
-            key name with a trailing "/" character using the Amazon 
-            S3 console. However, you can upload objects that are 
-            named with a trailing "/" with the Amazon S3 API by 
+            The Amazon S3 console treats all objects that have a
+            forward slash "/" character as the last (trailing)
+            character in the key name as a folder, for example
+            examplekeyname/. You can't upload an object that has a
+            key name with a trailing "/" character using the Amazon
+            S3 console. However, you can upload objects that are
+            named with a trailing "/" with the Amazon S3 API by
             using the AWS CLI, AWS SDKs, or REST API.
             """
 
@@ -1459,7 +1458,7 @@ class S3FileSystem(AsyncFileSystem):
         objects = [{"Key": self.split_path(path)[1]} for path in pathlist]
 
         if dir_prefix:
-            objects = [{"Key": self.split_path(path)[1]+'/'} for path in pathlist]
+            objects = [{"Key": self.split_path(path)[1] + "/"} for path in pathlist]
 
         delete_keys = {
             "Objects": objects,
@@ -1484,8 +1483,7 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _rm(self, paths, **kwargs):
         # if only path, then check for existence and do the right thing
-        if len(paths) == 1 and \
-                not self.exists(paths[0]):
+        if len(paths) == 1 and not self.exists(paths[0]):
             raise FileNotFoundError
 
         buckets = [p for p in paths if not self.split_path(p)[1]]
@@ -1495,14 +1493,14 @@ class S3FileSystem(AsyncFileSystem):
         # split files list for more than one bucket in the list
         await asyncio.gather(
             *[
-                self._bulk_delete(bucket_files[i: i + 1000])
+                self._bulk_delete(bucket_files[i : i + 1000])
                 for bucket_files in self.split_bucket_paths(files)
                 for i in range(0, len(bucket_files), 1000)
             ]
         )
         await asyncio.gather(
             *[
-                self._bulk_delete(dirs[i: i + 1000], dir_prefix=True)
+                self._bulk_delete(dirs[i : i + 1000], dir_prefix=True)
                 for i in range(0, len(dirs), 1000)
             ]
         )
