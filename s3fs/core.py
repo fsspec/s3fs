@@ -734,7 +734,6 @@ class S3FileSystem(AsyncFileSystem):
             # the root always exists, even if anon
             return True
         bucket, key, version_id = self.split_path(path)
-
         if key:
             if path.endswith("/"):
                 key = key.rstrip("/") + "/"
@@ -911,7 +910,6 @@ class S3FileSystem(AsyncFileSystem):
     async def _info(self, path, bucket=None, key=None, kwargs={}, version_id=None):
         if bucket is None:
             bucket, key, version_id = self.split_path(path)
-
         try:
             out = await self._call_s3(
                 self.s3.head_object,
