@@ -953,7 +953,7 @@ class S3FileSystem(AsyncFileSystem):
                 Bucket=bucket,
                 Prefix=key.rstrip("/") + "/",
                 Delimiter="/",
-                MaxKeys=2,
+                MaxKeys=1,
                 **self.req_kw,
             )
             if (
