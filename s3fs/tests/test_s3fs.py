@@ -578,6 +578,25 @@ def test_mkdir(s3):
     s3.mkdir(bucket)
     assert bucket in s3.ls("/")
 
+    s3.mkdir("test-bucket/foo/")
+    assert s3.exists("test-bucket/foo/")
+    assert s3.isdir("test-bucket/foo/")
+    assert not s3.isfile("test-bucket/foo/")
+    s3.touch("test-bucket/foo/bar")
+    assert s3.exists("test-bucket/foo/")
+
+    s3.mkdir("test-bucket/foo2")  # A missing trailing / is the only difference
+    assert s3.exists("test-bucket/foo2/")
+    assert s3.isdir("test-bucket/foo2/")
+    assert not s3.isfile("test-bucket/foo2/")
+    s3.touch("test-bucket/foo2/bar")
+    assert s3.exists("test-bucket/foo2/")
+
+    s3.touch("test-bucket/foo3/bar")
+    assert s3.exists("test-bucket/foo3/")
+    assert s3.isdir("test-bucket/foo3/")
+    assert not s3.isfile("test-bucket/foo3/")
+
 
 def test_mkdir_region_name(s3):
     bucket = "test2_bucket"
