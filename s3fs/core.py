@@ -1473,6 +1473,16 @@ class S3FileSystem(AsyncFileSystem):
             self.s3.delete_objects, kwargs, Bucket=bucket, Delete=delete_keys
         )
 
+    def split_bucket_paths(self, paths):
+        bucket_paths = dict()
+        for path in paths:
+            bucket, _, _ = self.split_path(path)
+            if bucket not in bucket_paths:
+                bucket_paths[bucket] = list()
+            bucket_paths[bucket].append(path)
+
+        return list(bucket_paths.values())
+
     async def _rm(self, paths, **kwargs):
         # if only path, then check for existence and do the right thing
         if len(paths) == 1 and \
@@ -1483,13 +1493,16 @@ class S3FileSystem(AsyncFileSystem):
         files = [p for p in paths if p not in buckets and self.isfile(p)]
         dirs = [p for p in paths if p not in buckets + files]
 
-        # TODO: fails if more than one bucket in list
-        await asyncio.gather(
-            *[
-                self._bulk_delete(files[i: i + 1000])
-                for i in range(0, len(files), 1000)
-            ]
-        )
+        # split files list for more than one bucket in the list
+        # TODO: make it fully parallel (instead of await for each bucket)
+        for bucket_files in self.split_bucket_paths(files):
+            await asyncio.gather(
+                *[
+                    self._bulk_delete(bucket_files[i: i + 1000])
+                    for i in range(0, len(files), 1000)
+                ]
+            )
+
         await asyncio.gather(
             *[
                 self._bulk_delete(dirs[i: i + 1000], dir_prefix=True)

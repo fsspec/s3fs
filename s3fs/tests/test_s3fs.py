@@ -586,6 +586,45 @@ def test_bulk_delete(s3):
     filelist = s3.find(test_bucket_name + "/nested")
     s3.rm(filelist)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
+    s3.rm(test_bucket_name, recursive=True)
+
+    # delete multiple files and directory
+    s3.mkdir('test/dir1')
+
+    s3.touch('test/dir1/a.txt')
+    s3.touch('test/dir1/b.txt')
+    s3.touch('test/dir1/c.txt')
+
+    s3.touch('test/dir2/a.txt')
+    s3.touch('test/dir2/b.txt')
+    s3.touch('test/dir2/c.txt')
+
+    s3.mkdir('test/dir2/dir3')
+
+    s3.makedirs('test/dir5/dir6')
+
+    s3.makedirs('test2/dir7')
+
+    # new bucket
+    s3.touch('test2/dir7/something')
+
+    # multi-bucket bulk delete
+    s3.rm([
+        'test/dir2/a.txt',
+        'test/dir2/dir3',
+        'test2/dir7/something'
+    ])
+    assert s3.exists('test2')
+
+    assert len(s3.ls('test/dir2')) == 2
+
+    s3.rm('test/dir1', recursive=True)
+    assert not s3.exists('test/dir1')
+    assert len(s3.ls('test')) == 2
+    assert len(s3.ls('test/dir2')) == 2
+
+    s3.rm('test', recursive=True)
+    assert not s3.exists('test')
 
 
 @pytest.mark.xfail(reason="anon user is still priviliged on moto")
