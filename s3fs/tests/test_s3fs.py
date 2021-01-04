@@ -411,6 +411,26 @@ def test_not_delegate():
     assert out == {"anon": False}
 
 
+def test_split_path(s3):
+    assert s3.split_path(
+        "s3://mybucket/path/to/directory/"
+    ) == ('mybucket', 'path/to/directory', None)
+
+    assert s3.split_path(
+        "s3://mybucket/path/to/file"
+    ) == ('mybucket', 'path/to/file', None)
+
+    assert s3.split_path(
+        "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
+    ) == ('mybucket', 'path/to/versioned_file', None)
+
+    s3.version_aware = True
+
+    assert s3.split_path(
+        "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
+    ) == ('mybucket', 'path/to/versioned_file', 'some_version_id')
+
+
 def test_ls(s3):
     assert set(s3.ls("")) == {
         test_bucket_name,
