@@ -295,9 +295,6 @@ class S3FileSystem(AsyncFileSystem):
         >>> split_path("s3://mybucket/path/to/file")
         ['mybucket', 'path/to/file', None]
 
-        >>> split_path("s3://mybucket/path/to/directory/")
-        ['mybucket', 'path/to/directory/', None]
-
         >>> split_path("s3://mybucket/path/to/versioned_file?versionId=some_version_id")
         ['mybucket', 'path/to/versioned_file', 'some_version_id']
         """
@@ -308,8 +305,6 @@ class S3FileSystem(AsyncFileSystem):
         else:
             bucket, keypart = path.split("/", 1)
             key, _, version_id = keypart.partition("?versionId=")
-            # retain trailing "/" from original path (s3 treats it for directory)
-            key = key + "/" if path.endswith("/") else key
             return (
                 bucket,
                 key,
