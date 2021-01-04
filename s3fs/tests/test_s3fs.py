@@ -1805,6 +1805,12 @@ def test_via_fsspec(s3):
     with fsspec.open("mine/oi", "rb") as f:
         assert f.read() == b"hello"
 
+    # TODO: should this test not connecting to S3?
+    #  replace fs.rm with s3.rm
+    # Interim: removing the residual local folder `mine`
+    fs = fsspec.filesystem('file')
+    fs.rm("mine", recursive=True)
+
 
 def test_repeat_exists(s3):
     fn = "s3://" + test_bucket_name + "/file1"
