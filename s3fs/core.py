@@ -636,6 +636,19 @@ class S3FileSystem(AsyncFileSystem):
             return
 
         try:
+            """
+            https://docs.aws.amazon.com/AmazonS3/latest/user-guide/using-folders.html
+            
+            The Amazon S3 console treats all objects that have a 
+            forward slash "/" character as the last (trailing) 
+            character in the key name as a folder, for example 
+            examplekeyname/. You can't upload an object that has a 
+            key name with a trailing "/" character using the Amazon 
+            S3 console. However, you can upload objects that are 
+            named with a trailing "/" with the Amazon S3 API by 
+            using the AWS CLI, AWS SDKs, or REST API.
+            """
+
             folder_key = key.rstrip("/") + "/"
             write_result = self.call_s3(
                 self.s3.put_object, kwargs, Bucket=bucket, Key=folder_key
