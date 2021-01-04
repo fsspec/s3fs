@@ -235,12 +235,10 @@ def test_info(s3):
     assert id(s3.info(a)) == id(s3.dircache[parent][0])  # is object from cache
 
     new_parent = test_bucket_name + "/foo"
-    s3.mkdir(new_parent)
-    with pytest.raises(FileNotFoundError):
-        s3.info(new_parent)
+    s3.makedirs(new_parent)
+    assert s3.isdir(new_parent)
+    assert not s3.isfile(new_parent)
     s3.ls(new_parent)
-    with pytest.raises(FileNotFoundError):
-        s3.info(new_parent)
 
 
 def test_info_cached(s3):
@@ -575,6 +573,8 @@ def test_makedirs(s3):
     bucket = "test_makedirs_bucket"
     test_file = bucket + "/a/b/c/file"
     s3.makedirs(test_file)
+    assert s3.isdir(test_file)
+    assert not s3.isfile(test_file)
     assert bucket in s3.ls("/")
 
 
