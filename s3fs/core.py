@@ -1023,18 +1023,12 @@ class S3FileSystem(AsyncFileSystem):
         if "/" not in path:
             return super(S3FileSystem, self).isdir(path)
 
-        path = path.rstrip("/") + "/"
-
         if path in self.dircache:
             for fp in self.dircache[path]:
                 # For files the dircache can contain itself.
                 # If it contains anything other than itself it is a directory.
                 if fp["name"] != path:
                     return True
-
-            if len(self.dircache[path]) == 0:
-                return True
-
             return False
 
         parent = self._parent(path)
@@ -1457,6 +1451,8 @@ class S3FileSystem(AsyncFileSystem):
         pathlist : list(str)
             The keys to remove, must all be in the same bucket.
             Must have 0 < len <= 1000
+        dir_prefix: bool
+            True when pathlist is a list of folders to add trailing "/" to keys
         """
         if not pathlist:
             return
@@ -1467,16 +1463,15 @@ class S3FileSystem(AsyncFileSystem):
         if len(pathlist) > 1000:
             raise ValueError("Max number of files to delete in one call is 1000")
 
+        objects = [{"Key": self.split_path(path)[1]} for path in pathlist]
+
         if dir_prefix:
-            delete_keys = {
-                "Objects": [{"Key": self.split_path(path)[1]+'/'} for path in pathlist],
-                "Quiet": True,
-            }
-        else:
-            delete_keys = {
-                "Objects": [{"Key": self.split_path(path)[1]} for path in pathlist],
-                "Quiet": True,
-            }
+            objects = [{"Key": self.split_path(path)[1]+'/'} for path in pathlist]
+
+        delete_keys = {
+            "Objects": objects,
+            "Quiet": True,
+        }
 
         for path in pathlist:
             self.invalidate_cache(self._parent(path))
@@ -1505,15 +1500,13 @@ class S3FileSystem(AsyncFileSystem):
         dirs = [p for p in paths if p not in buckets + files]
 
         # split files list for more than one bucket in the list
-        # TODO: make it fully parallel (instead of await for each bucket)
-        for bucket_files in self.split_bucket_paths(files):
-            await asyncio.gather(
-                *[
-                    self._bulk_delete(bucket_files[i: i + 1000])
-                    for i in range(0, len(files), 1000)
-                ]
-            )
-
+        await asyncio.gather(
+            *[
+                self._bulk_delete(bucket_files[i: i + 1000])
+                for bucket_files in self.split_bucket_paths(files)
+                for i in range(0, len(bucket_files), 1000)
+            ]
+        )
         await asyncio.gather(
             *[
                 self._bulk_delete(dirs[i: i + 1000], dir_prefix=True)
