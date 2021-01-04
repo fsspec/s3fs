@@ -295,10 +295,12 @@ class S3FileSystem(AsyncFileSystem):
         >>> split_path("s3://mybucket/path/to/file")
         ['mybucket', 'path/to/file', None]
 
+        >>> split_path("s3://mybucket/path/to/directory/")
+        ['mybucket', 'path/to/directory/', None]
+
         >>> split_path("s3://mybucket/path/to/versioned_file?versionId=some_version_id")
         ['mybucket', 'path/to/versioned_file', 'some_version_id']
         """
-        key_suffix = '/' if path.endswith('/') else ''
         path = self._strip_protocol(path)
         path = path.lstrip("/")
         if "/" not in path:
@@ -306,7 +308,8 @@ class S3FileSystem(AsyncFileSystem):
         else:
             bucket, keypart = path.split("/", 1)
             key, _, version_id = keypart.partition("?versionId=")
-            key = key.rstrip("/") + key_suffix
+            # retain trailing "/" from original path (s3 treats it for directory)
+            key = key + "/" if path.endswith("/") else key
             return (
                 bucket,
                 key,
@@ -561,15 +564,19 @@ class S3FileSystem(AsyncFileSystem):
         #     elif len(out) == 0:
         #         return super().find(path)
         #     # else: we refresh anyway, having at least two missing trees
-        if not path.endswith("/"):
-            path = path + "/"
 
+        # list directory with path as prefix
         out = await self._lsdir(path, delimiter="")
+
+        # if not files in the directory, assume it would be a file
         if not out and key:
             try:
-                path = path.rstrip("/")
                 out = [await self._info(path)]
-                out = [o for o in out if o['type'] != 'directory']
+                # exclude directories matching as `path` from the list
+                if len(out) == 1 \
+                        and out[0]['type'] == 'directory' \
+                        and out[0]['name'] == path:
+                    out = []
             except FileNotFoundError:
                 out = []
         dirs = []
@@ -1430,7 +1437,7 @@ class S3FileSystem(AsyncFileSystem):
             ]
         )
 
-    async def _bulk_delete(self, pathlist, dirs=False, **kwargs):
+    async def _bulk_delete(self, pathlist, dir_prefix=False, **kwargs):
         """
         Remove multiple keys with one call
 
@@ -1449,7 +1456,7 @@ class S3FileSystem(AsyncFileSystem):
         if len(pathlist) > 1000:
             raise ValueError("Max number of files to delete in one call is 1000")
 
-        if dirs:
+        if dir_prefix:
             delete_keys = {
                 "Objects": [{"Key": self.split_path(path)[1]+'/'} for path in pathlist],
                 "Quiet": True,
@@ -1467,15 +1474,15 @@ class S3FileSystem(AsyncFileSystem):
         )
 
     async def _rm(self, paths, **kwargs):
-        paths = sorted(paths, reverse=True)
-        files = [p for p in paths if self.isfile(p)]
-        dirs = [p for p in paths if self.isdir(p)]
+        # if only path, then check for existence and do the right thing
+        if len(paths) == 1 and \
+                not self.exists(paths[0]):
+            raise FileNotFoundError
+
         buckets = [p for p in paths if not self.split_path(p)[1]]
-        for bucket in buckets:
-            try:
-                dirs.remove(bucket)
-            except ValueError:
-                pass
+        files = [p for p in paths if p not in buckets and self.isfile(p)]
+        dirs = [p for p in paths if p not in buckets + files]
+
         # TODO: fails if more than one bucket in list
         await asyncio.gather(
             *[
@@ -1485,7 +1492,7 @@ class S3FileSystem(AsyncFileSystem):
         )
         await asyncio.gather(
             *[
-                self._bulk_delete(dirs[i: i + 1000], dirs=True)
+                self._bulk_delete(dirs[i: i + 1000], dir_prefix=True)
                 for i in range(0, len(dirs), 1000)
             ]
         )

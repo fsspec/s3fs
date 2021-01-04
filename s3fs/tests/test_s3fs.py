@@ -527,10 +527,12 @@ def test_rm(s3):
     s3.rm(a)
     assert not s3.exists(a)
     # the API is OK with deleting non-files; maybe this is an effect of using bulk
-    # with pytest.raises(FileNotFoundError):
-    #    s3.rm(test_bucket_name + '/nonexistent')
+    with pytest.raises(FileNotFoundError):
+        s3.rm(test_bucket_name + '/nonexistent')
+
     with pytest.raises(FileNotFoundError):
         s3.rm("nonexistent")
+
     s3.rm(test_bucket_name + "/nested", recursive=True)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
 
@@ -894,6 +896,8 @@ def test_new_bucket(s3):
         s3.rmdir("new")
 
     s3.rm("new/temp")
+    assert not s3.exists("new/temp")
+    assert s3.exists("new")
     s3.rmdir("new")
     assert "new" not in s3.ls("")
     assert not s3.exists("new")
