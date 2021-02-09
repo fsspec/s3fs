@@ -8,7 +8,7 @@
 
 4.  Push new version bump commit and tag to github
 
-        git push dask master --tags
+        git push dask main --tags
 
 5.  Build source and wheel packages
 
