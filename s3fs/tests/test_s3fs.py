@@ -242,12 +242,10 @@ def test_info(s3):
     assert id(s3.info(a)) == id(s3.dircache[parent][0])  # is object from cache
 
     new_parent = test_bucket_name + "/foo"
-    s3.mkdir(new_parent)
-    with pytest.raises(FileNotFoundError):
-        s3.info(new_parent)
+    s3.makedirs(new_parent)
+    assert s3.isdir(new_parent)
+    assert not s3.isfile(new_parent)
     s3.ls(new_parent)
-    with pytest.raises(FileNotFoundError):
-        s3.info(new_parent)
 
 
 def test_info_cached(s3):
@@ -420,6 +418,30 @@ def test_not_delegate():
     assert out == {"anon": False}
 
 
+def test_split_path(s3):
+    assert s3.split_path("s3://mybucket/path/to/directory/") == (
+        "mybucket",
+        "path/to/directory",
+        None,
+    )
+
+    assert s3.split_path("s3://mybucket/path/to/file") == (
+        "mybucket",
+        "path/to/file",
+        None,
+    )
+
+    assert s3.split_path(
+        "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
+    ) == ("mybucket", "path/to/versioned_file", None)
+
+    s3.version_aware = True
+
+    assert s3.split_path(
+        "s3://mybucket/path/to/versioned_file?versionId=some_version_id"
+    ) == ("mybucket", "path/to/versioned_file", "some_version_id")
+
+
 def test_ls(s3):
     assert set(s3.ls("")) == {
         test_bucket_name,
@@ -536,10 +558,12 @@ def test_rm(s3):
     s3.rm(a)
     assert not s3.exists(a)
     # the API is OK with deleting non-files; maybe this is an effect of using bulk
-    # with pytest.raises(FileNotFoundError):
-    #    s3.rm(test_bucket_name + '/nonexistent')
+    with pytest.raises(FileNotFoundError):
+        s3.rm(test_bucket_name + "/nonexistent")
+
     with pytest.raises(FileNotFoundError):
         s3.rm("nonexistent")
+
     s3.rm(test_bucket_name + "/nested", recursive=True)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
 
@@ -560,6 +584,25 @@ def test_mkdir(s3):
     bucket = "test1_bucket"
     s3.mkdir(bucket)
     assert bucket in s3.ls("/")
+
+    s3.mkdir("test-bucket/foo/")
+    assert s3.exists("test-bucket/foo/")
+    assert s3.isdir("test-bucket/foo/")
+    assert not s3.isfile("test-bucket/foo/")
+    s3.touch("test-bucket/foo/bar")
+    assert s3.exists("test-bucket/foo/")
+
+    s3.mkdir("test-bucket/foo2")  # A missing trailing / is the only difference
+    assert s3.exists("test-bucket/foo2/")
+    assert s3.isdir("test-bucket/foo2/")
+    assert not s3.isfile("test-bucket/foo2/")
+    s3.touch("test-bucket/foo2/bar")
+    assert s3.exists("test-bucket/foo2/")
+
+    s3.touch("test-bucket/foo3/bar")
+    assert s3.exists("test-bucket/foo3/")
+    assert s3.isdir("test-bucket/foo3/")
+    assert not s3.isfile("test-bucket/foo3/")
 
 
 def test_mkdir_region_name(s3):
@@ -582,6 +625,8 @@ def test_makedirs(s3):
     bucket = "test_makedirs_bucket"
     test_file = bucket + "/a/b/c/file"
     s3.makedirs(test_file)
+    assert s3.isdir(test_file)
+    assert not s3.isfile(test_file)
     assert bucket in s3.ls("/")
 
 
@@ -591,6 +636,41 @@ def test_bulk_delete(s3):
     filelist = s3.find(test_bucket_name + "/nested")
     s3.rm(filelist)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
+    s3.rm(test_bucket_name, recursive=True)
+
+    # delete multiple files and directory
+    s3.mkdir("test/dir1")
+
+    s3.touch("test/dir1/a.txt")
+    s3.touch("test/dir1/b.txt")
+    s3.touch("test/dir1/c.txt")
+
+    s3.touch("test/dir2/a.txt")
+    s3.touch("test/dir2/b.txt")
+    s3.touch("test/dir2/c.txt")
+
+    s3.mkdir("test/dir2/dir3")
+
+    s3.makedirs("test/dir5/dir6")
+
+    s3.makedirs("test2/dir7")
+
+    # new bucket
+    s3.touch("test2/dir7/something")
+
+    # multi-bucket bulk delete
+    s3.rm(["test/dir2/a.txt", "test/dir2/dir3", "test2/dir7/something"])
+    assert s3.exists("test2")
+
+    assert len(s3.ls("test/dir2")) == 2
+
+    s3.rm("test/dir1", recursive=True)
+    assert not s3.exists("test/dir1")
+    assert len(s3.ls("test")) == 2
+    assert len(s3.ls("test/dir2")) == 2
+
+    s3.rm("test", recursive=True)
+    assert not s3.exists("test")
 
 
 @pytest.mark.xfail(reason="anon user is still priviliged on moto")
@@ -902,6 +982,8 @@ def test_new_bucket(s3):
         s3.rmdir("new")
 
     s3.rm("new/temp")
+    assert not s3.exists("new/temp")
+    assert s3.exists("new")
     s3.rmdir("new")
     assert "new" not in s3.ls("")
     assert not s3.exists("new")
@@ -1763,6 +1845,12 @@ def test_via_fsspec(s3):
         f.write(b"hello")
     with fsspec.open("mine/oi", "rb") as f:
         assert f.read() == b"hello"
+
+    # TODO: should this test not connecting to S3?
+    #  replace fs.rm with s3.rm
+    # Interim: removing the residual local folder `mine`
+    fs = fsspec.filesystem("file")
+    fs.rm("mine", recursive=True)
 
 
 def test_repeat_exists(s3):

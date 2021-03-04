@@ -485,7 +485,12 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _lsdir(self, path, refresh=False, max_items=None, delimiter="/"):
         bucket, prefix, _ = self.split_path(path)
-        prefix = prefix + "/" if prefix else ""
+
+        if prefix:
+            prefix = prefix.rstrip("/") + "/"
+        else:
+            prefix = ""
+
         if path not in self.dircache or refresh or not delimiter:
             try:
                 logger.debug("Get directory listing page for %s" % path)
@@ -505,9 +510,13 @@ class S3FileSystem(AsyncFileSystem):
                 async for i in it:
                     dircache.extend(i.get("CommonPrefixes", []))
                     for c in i.get("Contents", []):
-                        c["type"] = "file"
-                        c["size"] = c["Size"]
-                        files.append(c)
+                        if c["Key"].endswith("/"):
+                            if c["Key"] != prefix:
+                                dircache.append({"Prefix": c["Key"]})
+                        else:
+                            c["type"] = "file"
+                            c["size"] = c["Size"]
+                            files.append(c)
                 if dircache:
                     files.extend(
                         [
@@ -527,7 +536,7 @@ class S3FileSystem(AsyncFileSystem):
             except ClientError as e:
                 raise translate_boto_error(e) from e
 
-            if delimiter:
+            if delimiter and files:
                 self.dircache[path] = files
             return files
         return self.dircache[path]
@@ -549,10 +558,21 @@ class S3FileSystem(AsyncFileSystem):
         #     elif len(out) == 0:
         #         return super().find(path)
         #     # else: we refresh anyway, having at least two missing trees
+
+        # list directory with path as prefix
         out = await self._lsdir(path, delimiter="")
+
+        # if not files in the directory, assume it would be a file
         if not out and key:
             try:
                 out = [await self._info(path)]
+                # exclude directories matching as `path` from the list
+                if (
+                    len(out) == 1
+                    and out[0]["type"] == "directory"
+                    and out[0]["name"] == path
+                ):
+                    out = []
             except FileNotFoundError:
                 out = []
         dirs = []
@@ -586,7 +606,7 @@ class S3FileSystem(AsyncFileSystem):
     find = sync_wrapper(_find)
 
     async def _mkdir(self, path, acl="", create_parents=True, **kwargs):
-        path = self._strip_protocol(path).rstrip("/")
+        path = self._strip_protocol(path)
         bucket, key, _ = self.split_path(path)
         if not key or (create_parents and not await self._exists(bucket)):
             if acl and acl not in buck_acls:
@@ -611,6 +631,31 @@ class S3FileSystem(AsyncFileSystem):
             # raises if bucket doesn't exist, but doesn't write anything
             await self._ls(bucket)
 
+        if not key:
+            return
+
+        try:
+            """
+            https://docs.aws.amazon.com/AmazonS3/latest/user-guide/using-folders.html
+            The Amazon S3 console treats all objects that have a
+            forward slash "/" character as the last (trailing)
+            character in the key name as a folder, for example
+            examplekeyname/. You can't upload an object that has a
+            key name with a trailing "/" character using the Amazon
+            S3 console. However, you can upload objects that are
+            named with a trailing "/" with the Amazon S3 API by
+            using the AWS CLI, AWS SDKs, or REST API.
+            """
+
+            folder_key = key.rstrip("/") + "/"
+            write_result = self.call_s3(
+                self.s3.put_object, kwargs, Bucket=bucket, Key=folder_key
+            )
+        except ClientError as ex:
+            raise translate_boto_error(ex) from ex
+        self.invalidate_cache(self._parent(path))
+        return write_result
+
     mkdir = sync_wrapper(_mkdir)
 
     def makedirs(self, path, exist_ok=False):
@@ -624,7 +669,13 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _rmdir(self, path):
         try:
-            await self.s3.delete_bucket(Bucket=path)
+            bucket, key, _ = self.split_path(path)
+            if key:
+                # handle deletion of folder prefix (key) here
+                # do not just delete bucket in this case
+                self.rm(path, recursive=True)
+            else:
+                await self.s3.delete_bucket(Bucket=bucket)
         except botocore.exceptions.ClientError as e:
             if "NoSuchBucket" in str(e):
                 raise FileNotFoundError(path) from e
@@ -687,14 +738,19 @@ class S3FileSystem(AsyncFileSystem):
             return True
         bucket, key, version_id = self.split_path(path)
         if key:
+            if path.endswith("/"):
+                key = key.rstrip("/") + "/"
+
             try:
                 if self._ls_from_cache(path):
                     return True
             except FileNotFoundError:
                 return False
             try:
-                await self._info(path, bucket, key, version_id=version_id)
-                return True
+                info = await self._info(path, bucket, key, version_id=version_id)
+                if info is not None:
+                    return True
+                return False
             except FileNotFoundError:
                 return False
         elif self.dircache.get(bucket, False):
@@ -975,10 +1031,15 @@ class S3FileSystem(AsyncFileSystem):
         parent = self._parent(path)
         if parent in self.dircache:
             for f in self.dircache[parent]:
-                if f["name"] == path:
+                # TODO: avoid un-necessary rstrip
+                if f["name"].rstrip("/") == path.rstrip("/"):
                     # If we find ourselves return whether we are a directory
                     return f["type"] == "directory"
             return False
+
+        # Check for actual path+"/" object as directory object existence
+        if self.exists(path.rstrip("/") + "/"):
+            return True
 
         # This only returns things within the path and NOT the path object itself
         return bool(maybe_sync(self._lsdir, self, path))
@@ -1378,7 +1439,7 @@ class S3FileSystem(AsyncFileSystem):
             ]
         )
 
-    async def _bulk_delete(self, pathlist, **kwargs):
+    async def _bulk_delete(self, pathlist, dir_prefix=False, **kwargs):
         """
         Remove multiple keys with one call
 
@@ -1387,6 +1448,8 @@ class S3FileSystem(AsyncFileSystem):
         pathlist : list(str)
             The keys to remove, must all be in the same bucket.
             Must have 0 < len <= 1000
+        dir_prefix: bool
+            True when pathlist is a list of folders to add trailing "/" to keys
         """
         if not pathlist:
             return
@@ -1396,27 +1459,57 @@ class S3FileSystem(AsyncFileSystem):
         bucket = buckets.pop()
         if len(pathlist) > 1000:
             raise ValueError("Max number of files to delete in one call is 1000")
+
+        objects = [{"Key": self.split_path(path)[1]} for path in pathlist]
+
+        if dir_prefix:
+            objects = [{"Key": self.split_path(path)[1] + "/"} for path in pathlist]
+
         delete_keys = {
-            "Objects": [{"Key": self.split_path(path)[1]} for path in pathlist],
+            "Objects": objects,
             "Quiet": True,
         }
+
         for path in pathlist:
             self.invalidate_cache(self._parent(path))
         await self._call_s3(
             self.s3.delete_objects, kwargs, Bucket=bucket, Delete=delete_keys
         )
 
+    def split_bucket_paths(self, paths):
+        bucket_paths = dict()
+        for path in paths:
+            bucket, _, _ = self.split_path(path)
+            if bucket not in bucket_paths:
+                bucket_paths[bucket] = list()
+            bucket_paths[bucket].append(path)
+
+        return list(bucket_paths.values())
+
     async def _rm(self, paths, **kwargs):
-        files = [p for p in paths if self.split_path(p)[1]]
-        dirs = [p for p in paths if not self.split_path(p)[1]]
-        # TODO: fails if more than one bucket in list
+        # if only path, then check for existence and do the right thing
+        if len(paths) == 1 and not self.exists(paths[0]):
+            raise FileNotFoundError
+
+        buckets = [p for p in paths if not self.split_path(p)[1]]
+        files = [p for p in paths if p not in buckets and self.isfile(p)]
+        dirs = [p for p in paths if p not in buckets + files]
+
+        # split files list for more than one bucket in the list
         await asyncio.gather(
             *[
-                self._bulk_delete(files[i : i + 1000])
-                for i in range(0, len(files), 1000)
+                self._bulk_delete(bucket_files[i : i + 1000])
+                for bucket_files in self.split_bucket_paths(files)
+                for i in range(0, len(bucket_files), 1000)
             ]
         )
-        await asyncio.gather(*[self._rmdir(d) for d in dirs])
+        await asyncio.gather(
+            *[
+                self._bulk_delete(dirs[i : i + 1000], dir_prefix=True)
+                for i in range(0, len(dirs), 1000)
+            ]
+        )
+        await asyncio.gather(*[self._rmdir(d) for d in buckets])
         [
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
             for p in paths
