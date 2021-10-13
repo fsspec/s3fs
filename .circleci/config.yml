@@ -3,9 +3,6 @@ version: 2.1
 commands:
   runtests:
     description: "Run the tests"
-    parameters:
-      db_port:
-        type: integer
     steps:
       - checkout
       - run:
