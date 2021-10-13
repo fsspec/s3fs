@@ -12,11 +12,6 @@ commands:
           name: Install pipenv and dependencies
           command: |
             pipenv install --dev --deploy
-       # TODO: Will re-enable in a separate PR to not shadow the new features/CI/CD/etc
-#      - run:
-#          name: Lint code
-#          command: |
-#            pipenv run flake8 --config=.flake8.ini --show-source --statistics --count .
       - run:
           name: Run Tests
           command: |
