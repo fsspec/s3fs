@@ -12,7 +12,7 @@ commands:
       - run:
           name: Run Tests
           command: |
-            pipenv run coverage3 run -m pytest discover -v
+            pipenv run coverage3 run -m pytest -v
             pipenv run coverage3 xml
       - run:
           name: Build
