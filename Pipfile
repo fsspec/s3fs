@@ -1,0 +1,16 @@
+[dev-packages]
+pytest = "==6.2.5"
+requests = "==2.26.0"
+moto = "==2.2.9"
+flask = "==2.0.2"
+flask-cors = "3.0.10"
+pytest-env = "0.6.2"
+flake8 = "4.0.1"
+coverage = "6.0.2"
+
+[packages]
+aiobotocore = ">=1.2.1"
+fsspec = "==2021.10.0"
+
+[requires]
+python_version = "3.9.2"

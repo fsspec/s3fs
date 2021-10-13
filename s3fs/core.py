@@ -550,8 +550,10 @@ class S3FileSystem(AsyncFileSystem):
         )
 
     async def _lsdir(
-        self, path, refresh=False, max_items=None, delimiter="/", prefix=""
+        self, path, refresh=False, max_items=None, delimiter="/", prefix="", **kwargs,
     ):
+        max_limit_num_results = kwargs.get('max_limit_num_results', None)
+        use_dir_cache = kwargs.get('use_dir_cache', True)
         bucket, key, _ = self.split_path(path)
         if not prefix:
             prefix = ""
@@ -565,7 +567,7 @@ class S3FileSystem(AsyncFileSystem):
                 pag = s3.get_paginator("list_objects_v2")
                 config = {}
                 if max_items is not None:
-                    config.update(MaxItems=max_items, PageSize=2 * max_items)
+                    config.update(MaxItems=max_items if max_limit_num_results is None else min(max_items, max_limit_num_results), PageSize=2 * max_items)
                 it = pag.paginate(
                     Bucket=bucket,
                     Prefix=prefix,
@@ -575,13 +577,20 @@ class S3FileSystem(AsyncFileSystem):
                 )
                 files = []
                 dircache = []
+                should_break = False
                 async for i in it:
+                    if should_break:
+                        break
                     dircache.extend(i.get("CommonPrefixes", []))
                     for c in i.get("Contents", []):
                         c["type"] = "file"
                         c["size"] = c["Size"]
                         files.append(c)
-                if dircache:
+                        if max_limit_num_results is not None and len(files) >= max_limit_num_results:
+                            should_break = True
+                            break
+
+                if dircache and use_dir_cache:
                     files.extend(
                         [
                             {
@@ -610,12 +619,12 @@ class S3FileSystem(AsyncFileSystem):
             raise ValueError("Cannot traverse all of S3")
         return await super()._glob(path, **kwargs)
 
-    async def _find(self, path, maxdepth=None, withdirs=None, detail=False, prefix=""):
+    async def _find(self, path, maxdepth=None, withdirs=None, detail=False, prefix="", **kwargs):
         """List all files below path.
         Like posix ``find`` command without conditions
         Parameters
         ----------
-        path : str
+        path : str_walk
         maxdepth: int or None
             If not None, the maximum number of levels to descend
         withdirs: bool
@@ -636,7 +645,11 @@ class S3FileSystem(AsyncFileSystem):
             )
         if maxdepth:
             return await super()._find(
-                bucket + "/" + key, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                bucket + "/" + key,
+                maxdepth=maxdepth,
+                withdirs=withdirs,
+                detail=detail,
+                **kwargs,
             )
         # TODO: implement find from dircache, if all listings are present
         # if refresh is False:
@@ -647,7 +660,7 @@ class S3FileSystem(AsyncFileSystem):
         #     elif len(out) == 0:
         #         return super().find(path)
         #     # else: we refresh anyway, having at least two missing trees
-        out = await self._lsdir(path, delimiter="", prefix=prefix)
+        out = await self._lsdir(path, delimiter="", prefix=prefix, **kwargs)
         if not out and key:
             try:
                 out = [await self._info(path)]
@@ -773,7 +786,7 @@ class S3FileSystem(AsyncFileSystem):
             return files
         return self.dircache[""]
 
-    async def _ls(self, path, detail=False, refresh=False):
+    async def _ls(self, path, detail=False, refresh=False, **kwargs):
         """List files in given bucket, or list of buckets.
 
         Listing is cached unless `refresh=True`.
@@ -790,9 +803,9 @@ class S3FileSystem(AsyncFileSystem):
         """
         path = self._strip_protocol(path).rstrip("/")
         if path in ["", "/"]:
-            files = await self._lsbuckets(refresh)
+            files = await self._lsbuckets(refresh, **kwargs)
         else:
-            files = await self._lsdir(path, refresh)
+            files = await self._lsdir(path, refresh, **kwargs)
             if not files and "/" in path:
                 files = await self._lsdir(self._parent(path), refresh=refresh)
                 files = [

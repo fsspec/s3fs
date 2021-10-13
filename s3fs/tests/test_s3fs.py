@@ -1976,6 +1976,26 @@ def test_shallow_find(s3):
     assert s3.ls(test_bucket_name) == s3.glob(test_bucket_name + "/*")
 
 
+def test_find_with_return_limit_1(s3):
+    """Test that find method respects max_limit_num_results.
+
+    Verify that the ``find`` method respects the ``max_limit_num_results`` parameter.  With
+    ``max_limit_num_results=1``, the results of ``find`` should be 1
+    """
+
+    assert len(s3.glob(test_bucket_name + "/*", max_limit_num_results=1, use_dir_cache=False)) == 1
+
+
+def test_find_with_return_limit_2(s3):
+    """Test that find method respects max_limit_num_results.
+
+    Verify that the ``find`` method respects the ``max_limit_num_results`` parameter.  With
+    ``max_limit_num_results=2``, the results of ``find`` should be 2
+    """
+
+    assert len(s3.glob(test_bucket_name + "/*", max_limit_num_results=2, use_dir_cache=False)) == 2
+
+
 def test_version_sizes(s3):
     # protect against caching of incorrect version details
     s3 = S3FileSystem(

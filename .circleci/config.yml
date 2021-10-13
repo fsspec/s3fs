@@ -1,0 +1,65 @@
+version: 2.1
+
+commands:
+  runtests:
+    description: "Run the tests"
+    parameters:
+      db_port:
+        type: integer
+    steps:
+      - checkout
+      - run:
+          name: Install pipenv and dependencies
+          command: |
+            pipenv install --dev --deploy
+       # TODO: Will re-enable in a separate PR to not shadow the new features/CI/CD/etc
+#      - run:
+#          name: Lint code
+#          command: |
+#            pipenv run flake8 --config=.flake8.ini --show-source --statistics --count .
+      - run:
+          name: Run Tests
+          command: |
+            pipenv run coverage3 run -m pytest discover -v
+            pipenv run coverage3 xml
+      - run:
+          name: Build
+          command: |
+            python setup.py sdist
+jobs:
+  test:
+    docker:
+      - image: circleci/python:3.9.2
+        auth:
+          username: $DOCKER_HUB_USERNAME
+          password: $DOCKER_HUB_PASSWORD
+    steps:
+      - runtests:
+  push:
+    docker:
+      - image: circleci/python:3.9.2
+        auth:
+          username: $DOCKER_HUB_USERNAME
+          password: $DOCKER_HUB_PASSWORD
+    steps:
+      - checkout
+      - run:
+          name: Push to PyPi
+          command: pipenv run ./push_to_pypi.sh
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - test:
+          context:
+            - dockerhub
+      - push:
+          context:
+            - dockerhub
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - main
