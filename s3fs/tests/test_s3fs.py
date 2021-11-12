@@ -364,6 +364,7 @@ test_xattr_sample_metadata = {"test_xattr": "1"}
 
 
 def test_xattr(s3):
+    # Test PR: Is this test failing on `main`?
     bucket, key = (test_bucket_name, "tmp/test/xattr")
     filename = bucket + "/" + key
     body = b"aaaa"
