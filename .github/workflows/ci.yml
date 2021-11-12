@@ -51,3 +51,66 @@ jobs:
         run: |
           flake8 s3fs
           black s3fs --check
+
+  test-downstream:
+    name: Downstream (py${{ matrix.python-version }}, ${{ matrix.os }} arrow${{ matrix.pyarrow-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "windows-latest"]
+        python-version: ["3.8"]
+        pyarrow-version: [">=1,<2", ">=2,<3"]
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge,defaults
+          channel-priority: true
+          mamba-version: "*"
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          # we need the tags present
+          fetch-depth: 0
+
+      - name: Ensure tags up to date
+        run: >
+          git fetch --tags https://github.com/dask/s3fs.git
+
+      - name: Install conda dependencies
+        run: >
+          mamba install
+          -c conda-forge
+          'python=${{ matrix.python-version }}'
+          'pyarrow${{ matrix.pyarrow-version }}'
+          pip
+          botocore
+          aiobotocore
+          moto
+          pytest
+          dask
+          fastparquet
+          python-snappy
+
+      - name: Install portions from source
+        run: |
+          pip install git+https://github.com/intake/filesystem_spec/ --no-deps
+          pip install --no-deps .
+
+      - name: conda packages
+        run: conda list
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run test suite
+        run: |
+          pytest -vrsx -rA --color=yes downstream_tests
