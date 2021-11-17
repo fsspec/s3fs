@@ -7,8 +7,11 @@ dependencies:
   - aiobotocore==1.4.2
   - aiohttp>=3.7.1
   - black
-  - pytest>=4.2.0
-  - pytest-env
   - flake8
   - fsspec==2021.11.0
   - moto>=2.0.0
+  - pip
+  - pytest>=4.2.0
+  - pytest-env
+  - pip:
+      - -e .
