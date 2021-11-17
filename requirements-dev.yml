@@ -8,8 +8,9 @@ dependencies:
   - aiohttp>=3.7.1
   - black
   - flake8
-  - fsspec==2021.11.0
   - moto>=2.0.0
   - pip
   - pytest>=4.2.0
   - pytest-env
+  - pip:
+      - git+https://github.com/fsspec/filesystem_spec
