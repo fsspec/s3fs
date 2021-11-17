@@ -35,6 +35,7 @@ jobs:
         shell: bash -l {0}
         run: |
           mamba env update -f requirements-dev.yml
+          pip install git+https://github.com/fsspec/filesystem_spec --no-deps
           conda info
           conda list
           conda --version

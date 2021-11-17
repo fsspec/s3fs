@@ -13,5 +13,3 @@ dependencies:
   - pip
   - pytest>=4.2.0
   - pytest-env
-  - pip:
-      - -e .
