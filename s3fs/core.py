@@ -1765,7 +1765,7 @@ class S3File(AbstractBufferedFile):
         "ContentEncoding",
         "ContentLanguage",
         "ContentMD5",
-        "Expires"
+        "Expires",
     ]
 
     def __init__(
