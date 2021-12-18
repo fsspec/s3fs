@@ -1834,10 +1834,14 @@ class S3File(AbstractBufferedFile):
                     )
         elif "w" in mode or append:
             if "ContentType" not in self.s3_additional_kwargs:
-                mimetype, _ = guess_type(self.path)
+                mimetype, encoding = guess_type(self.path)
                 if isinstance(mimetype, str):
                     self.s3_additional_kwargs["ContentType"] = mimetype
-            if "ContentEncoding" not in self.s3_additional_kwargs:
+                    
+                if "ContentEncoding" not in self.s3_additional_kwargs:
+                    if isinstance(encoding, str):
+                        self.s3_additional_kwargs["ContentEncoding"] = encoding
+            elif "ContentEncoding" not in self.s3_additional_kwargs:
                 _, encoding = guess_type(self.path)
                 if isinstance(encoding, str):
                     self.s3_additional_kwargs["ContentEncoding"] = encoding
