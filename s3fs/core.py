@@ -1760,7 +1760,7 @@ class S3File(AbstractBufferedFile):
     part_max = 5 * 2 ** 30
     additional_info_keys = [
         "CacheControl",
-        "ContentDisposition", "ContentType", "ContentEncoding", "ContentLanguage", "ContentMD5"
+        "ContentDisposition", "ContentType", "ContentEncoding", "ContentLanguage", "ContentMD5",
         "Expires"
     ]
 
