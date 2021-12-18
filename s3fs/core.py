@@ -1047,7 +1047,7 @@ class S3FileSystem(AsyncFileSystem):
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
-                if "ContentEncoding" in out is not None:
+                if "ContentEncoding" in out:
                     info["ContentEncoding"] = out["ContentEncoding"]
                 return info
             except FileNotFoundError:
