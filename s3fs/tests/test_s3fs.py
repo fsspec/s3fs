@@ -16,7 +16,7 @@ import moto
 from itertools import chain
 import fsspec.core
 import s3fs.core
-from s3fs.core import S3FileSystem
+from s3fs.core import S3FileSystem, S3File
 from s3fs.utils import ignoring, SSEParams
 from botocore.exceptions import NoCredentialsError
 from fsspec.asyn import sync
@@ -256,8 +256,8 @@ def test_info(s3):
     linfo = s3.ls(a, detail=True)[0]
     assert abs(info.pop("LastModified") - linfo.pop("LastModified")).seconds < 1
     info.pop("VersionId")
-    info.pop("ContentType")
-    info.pop("ContentEncoding", None)
+    for key in S3File.additional_info_keys:
+        info.pop(key, None)
     assert info == linfo
     parent = a.rsplit("/", 1)[0]
     s3.invalidate_cache()  # remove full path from the cache
