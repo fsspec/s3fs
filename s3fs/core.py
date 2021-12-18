@@ -1760,7 +1760,11 @@ class S3File(AbstractBufferedFile):
     part_max = 5 * 2 ** 30
     additional_info_keys = [
         "CacheControl",
-        "ContentDisposition", "ContentType", "ContentEncoding", "ContentLanguage", "ContentMD5",
+        "ContentDisposition",
+        "ContentType",
+        "ContentEncoding",
+        "ContentLanguage",
+        "ContentMD5",
         "Expires"
     ]
 
@@ -1835,14 +1839,18 @@ class S3File(AbstractBufferedFile):
             for key in self.additional_info_keys:
                 value = info.get(key, None)
                 if value is not None:
-                    self.s3_additional_kwargs[key] = self.s3_additional_kwargs.get(key, value)
+                    self.s3_additional_kwargs[key] = self.s3_additional_kwargs.get(
+                        key, value
+                    )
         elif "w" in mode or append:
             # Infer HTTP Contents: Type, Encoding
             if "ContentType" not in self.s3_additional_kwargs:
                 mimetype, encoding = guess_type(self.path)
                 if isinstance(mimetype, str):
                     self.s3_additional_kwargs["ContentType"] = mimetype
-                if "ContentEncoding" not in self.s3_additional_kwargs and isinstance(encoding, str):
+                if "ContentEncoding" not in self.s3_additional_kwargs and isinstance(
+                    encoding, str
+                ):
                     self.s3_additional_kwargs["ContentEncoding"] = encoding
             elif "ContentEncoding" not in self.s3_additional_kwargs:
                 encoding = guess_type(self.path)[-1]
