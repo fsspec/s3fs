@@ -257,7 +257,7 @@ def test_info(s3):
     assert abs(info.pop("LastModified") - linfo.pop("LastModified")).seconds < 1
     info.pop("VersionId")
     info.pop("ContentType")
-    info.pop("ContentEncoding")
+    info.pop("ContentEncoding", None)
     assert info == linfo
     parent = a.rsplit("/", 1)[0]
     s3.invalidate_cache()  # remove full path from the cache
