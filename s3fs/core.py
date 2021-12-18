@@ -1829,7 +1829,9 @@ class S3File(AbstractBufferedFile):
             # Check Content
             for k in ["ContentType", "ContentEncoding"]:
                 if info.get(k) is not None:
-                    self.s3_additional_kwargs[k] = self.s3_additional_kwargs.get(k, info[k])
+                    self.s3_additional_kwargs[k] = self.s3_additional_kwargs.get(
+                        k, info[k]
+                    )
         elif "w" in mode or append:
             if "ContentType" not in self.s3_additional_kwargs:
                 mimetype, _ = guess_type(self.path)
