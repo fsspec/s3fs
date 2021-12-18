@@ -1837,7 +1837,6 @@ class S3File(AbstractBufferedFile):
                 mimetype, encoding = guess_type(self.path)
                 if isinstance(mimetype, str):
                     self.s3_additional_kwargs["ContentType"] = mimetype
-                    
                 if "ContentEncoding" not in self.s3_additional_kwargs:
                     if isinstance(encoding, str):
                         self.s3_additional_kwargs["ContentEncoding"] = encoding
