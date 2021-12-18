@@ -1036,19 +1036,19 @@ class S3FileSystem(AsyncFileSystem):
                     **self.req_kw,
                 )
                 info = {
-                    "ETag": out["ETag"],
+                    "ETag": out.pop("ETag"),
                     "Key": "/".join([bucket, key]),
-                    "LastModified": out["LastModified"],
-                    "Size": out["ContentLength"],
-                    "size": out["ContentLength"],
+                    "LastModified": out.pop("LastModified"),
+                    "Size": out.pop("ContentLength"),
                     "name": "/".join([bucket, key]),
                     "type": "file",
                     "StorageClass": "STANDARD",
-                    "VersionId": out.get("VersionId"),
-                    "ContentType": out.get("ContentType"),
+                    "VersionId": out.pop("VersionId", None),
                 }
-                if "ContentEncoding" in out:
-                    info["ContentEncoding"] = out["ContentEncoding"]
+                info["size"] = info["Size"]
+                for key in S3File.additional_info_keys:
+                    if key in out:
+                        info[key] = out[key]
                 return info
             except FileNotFoundError:
                 pass
@@ -1758,6 +1758,11 @@ class S3File(AbstractBufferedFile):
     retries = 5
     part_min = 5 * 2 ** 20
     part_max = 5 * 2 ** 30
+    additional_info_keys = [
+        "CacheControl",
+        "ContentDisposition", "ContentType", "ContentEncoding", "ContentLanguage",
+        "Expires"
+    ]
 
     def __init__(
         self,
@@ -1826,22 +1831,21 @@ class S3File(AbstractBufferedFile):
             else:
                 self.append_block = True
             self.loc = loc
-            # Check Content
-            for k in ["ContentType", "ContentEncoding"]:
-                if info.get(k) is not None:
-                    self.s3_additional_kwargs[k] = self.s3_additional_kwargs.get(
-                        k, info[k]
-                    )
+            # Check HTTP Contents: Type, Encoding, etc ...
+            for key in self.additional_info_keys:
+                value = info.get(key, None)
+                if value is not None:
+                    self.s3_additional_kwargs[key] = self.s3_additional_kwargs.get(key, value)
         elif "w" in mode or append:
+            # Infer HTTP Contents: Type, Encoding
             if "ContentType" not in self.s3_additional_kwargs:
                 mimetype, encoding = guess_type(self.path)
                 if isinstance(mimetype, str):
                     self.s3_additional_kwargs["ContentType"] = mimetype
-                if "ContentEncoding" not in self.s3_additional_kwargs:
-                    if isinstance(encoding, str):
-                        self.s3_additional_kwargs["ContentEncoding"] = encoding
+                if "ContentEncoding" not in self.s3_additional_kwargs and isinstance(encoding, str):
+                    self.s3_additional_kwargs["ContentEncoding"] = encoding
             elif "ContentEncoding" not in self.s3_additional_kwargs:
-                _, encoding = guess_type(self.path)
+                encoding = guess_type(self.path)[-1]
                 if isinstance(encoding, str):
                     self.s3_additional_kwargs["ContentEncoding"] = encoding
         elif "r" in mode and "ETag" in self.details:
