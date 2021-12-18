@@ -6,6 +6,7 @@ import os
 import socket
 from typing import Tuple, Optional
 import weakref
+from mimetypes import guess_type
 
 from urllib3.exceptions import IncompleteRead
 
@@ -1034,7 +1035,7 @@ class S3FileSystem(AsyncFileSystem):
                     **version_id_kw(version_id),
                     **self.req_kw,
                 )
-                return {
+                info = {
                     "ETag": out["ETag"],
                     "Key": "/".join([bucket, key]),
                     "LastModified": out["LastModified"],
@@ -1046,6 +1047,9 @@ class S3FileSystem(AsyncFileSystem):
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
+                if "ContentEncoding" in out is not None:
+                    info["ContentEncoding"] = out["ContentEncoding"]
+                return info
             except FileNotFoundError:
                 pass
             except ClientError as e:
@@ -1811,18 +1815,31 @@ class S3File(AbstractBufferedFile):
         self.s3 = self.fs  # compatibility
 
         # when not using autocommit we want to have transactional state to manage
-        self.append_block = False
+        append, self.append_block = "a" in mode, False
 
-        if "a" in mode and s3.exists(path):
-            loc = s3.info(path)["size"]
+        if append and s3.exists(path):
+            info = s3.info(path)
+            loc = info["size"]
             if loc < 5 * 2 ** 20:
                 # existing file too small for multi-upload: download
                 self.write(self.fs.cat(self.path))
             else:
                 self.append_block = True
             self.loc = loc
-
-        if "r" in mode and "ETag" in self.details:
+            # Check Content
+            for k in ["ContentType", "ContentEncoding"]:
+                if info.get(k) is not None:
+                    self.s3_additional_kwargs[k] = self.s3_additional_kwargs.get(k, info[k])
+        elif "w" in mode or append:
+            if "ContentType" not in self.s3_additional_kwargs:
+                mimetype, _ = guess_type(self.path)
+                if isinstance(mimetype, str):
+                    self.s3_additional_kwargs["ContentType"] = mimetype
+            if "ContentEncoding" not in self.s3_additional_kwargs:
+                _, encoding = guess_type(self.path)
+                if isinstance(encoding, str):
+                    self.s3_additional_kwargs["ContentEncoding"] = encoding
+        elif "r" in mode and "ETag" in self.details:
             self.req_kw["IfMatch"] = self.details["ETag"]
 
     def _call_s3(self, method, *kwarglist, **kwargs):
