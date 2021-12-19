@@ -1036,16 +1036,16 @@ class S3FileSystem(AsyncFileSystem):
                     **self.req_kw,
                 )
                 info = {
-                    "ETag": out.pop("ETag"),
+                    "ETag": out["ETag"],
                     "Key": "/".join([bucket, key]),
-                    "LastModified": out.pop("LastModified"),
-                    "Size": out.pop("ContentLength"),
+                    "LastModified": out["LastModified"],
+                    "Size": out["ContentLength"],
+                    "size": out["ContentLength"],
                     "name": "/".join([bucket, key]),
                     "type": "file",
-                    "StorageClass": "STANDARD",
-                    "VersionId": out.pop("VersionId", None),
+                    "StorageClass": out.get("StorageClass", "STANDARD"),
+                    "VersionId": out.get("VersionId", None),
                 }
-                info["size"] = info["Size"]
                 for key in S3File.additional_info_keys:
                     if key in out:
                         info[key] = out[key]
@@ -1758,6 +1758,8 @@ class S3File(AbstractBufferedFile):
     retries = 5
     part_min = 5 * 2 ** 20
     part_max = 5 * 2 ** 30
+    # See: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/
+    # services/s3.html#S3.Client.put_object
     additional_info_keys = [
         "CacheControl",
         "ContentDisposition",
@@ -1766,6 +1768,19 @@ class S3File(AbstractBufferedFile):
         "ContentLanguage",
         "ContentMD5",
         "Expires",
+        "GrantFullControl",
+        "GrantRead",
+        "GrantReadACP",
+        "GrantWriteACP",
+        "ServerSideEncryption",
+        "WebsiteRedirectLocation",
+        "SSECustomerAlgorithm",
+        "SSECustomerKey",
+        "SSEKMSKeyId",
+        "SSEKMSEncryptionContext",
+        "ObjectLockMode",
+        "ObjectLockRetainUntilDate",
+        "ObjectLockLegalHoldStatus",
     ]
 
     def __init__(
