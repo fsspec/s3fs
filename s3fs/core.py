@@ -937,14 +937,14 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _put_file(self, lpath, rpath, chunksize=50 * 2 ** 20, **kwargs):
         bucket, key, _ = self.split_path(rpath)
-        
+
         # Infer Content Type/Encoding
         mimetype, encoding = guess_type(key)
         if isinstance(mimetype, str):
             kwargs["ContentType"] = kwargs.get("ContentType", mimetype)
         if isinstance(encoding, str):
             kwargs["ContentEncoding"] = kwargs.get("ContentEncoding", encoding)
-        
+
         if os.path.isdir(lpath):
             if key:
                 # don't make remote "directory"
