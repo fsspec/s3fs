@@ -1979,6 +1979,7 @@ class S3File(AbstractBufferedFile):
                     Key=self.key,
                     Bucket=self.bucket,
                     Body=data,
+                    ACL=self.acl,
                     **self.kwargs,
                 )
             else:
