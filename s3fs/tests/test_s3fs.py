@@ -1034,6 +1034,28 @@ def test_write_small(s3):
     assert s3.info(test_bucket_name + "/test")["Size"] == 0
 
 
+def test_write_small_with_acl(s3):
+    bucket, key = (test_bucket_name, "test-acl")
+    filename = bucket + "/" + key
+    body = b"hello"
+    public_read_acl = {
+        "Permission": "READ",
+        "Grantee": {
+            "URI": "http://acs.amazonaws.com/groups/global/AllUsers",
+            "Type": "Group",
+        },
+    }
+    
+    with s3.open(filename, "wb", acl="public-read") as f:
+        f.write(body)
+    assert s3.cat(filename) == body
+
+    assert (
+        public_read_acl
+        in sync(s3.loop, s3.s3.get_object_acl, Bucket=bucket, Key=key)["Grants"]
+    )
+
+
 def test_write_large(s3):
     "flush() chunks buffer when processing large singular payload"
     mb = 2 ** 20
