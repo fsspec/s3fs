@@ -1045,7 +1045,7 @@ def test_write_small_with_acl(s3):
             "Type": "Group",
         },
     }
-    
+
     with s3.open(filename, "wb", acl="public-read") as f:
         f.write(body)
     assert s3.cat(filename) == body
