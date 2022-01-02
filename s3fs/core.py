@@ -1822,7 +1822,7 @@ class S3File(AbstractBufferedFile):
                     Bucket=bucket,
                     Key=key,
                     **version_id_kw(version_id),
-                    **self.req_kw
+                    **self.req_kw,
                 ).items()
                 if k
                 in {
