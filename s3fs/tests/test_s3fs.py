@@ -1226,6 +1226,7 @@ def test_append(s3):
     with s3.open(test_bucket_name + "/nested/file1", "ab") as f:
         assert f.tell() == len(data)  # append, no write, small file
     assert s3.cat(test_bucket_name + "/nested/file1") == data
+
     with s3.open(test_bucket_name + "/nested/file1", "ab") as f:
         f.write(b"extra")  # append, write, small file
     assert s3.cat(test_bucket_name + "/nested/file1") == data + b"extra"
@@ -1249,6 +1250,43 @@ def test_append(s3):
         f.write(b"b" * 10 * 2 ** 20)  # append, big write, big file
         assert f.tell() == 20 * 2 ** 20 + 5
     assert s3.cat(a) == b"a" * 10 * 2 ** 20 + b"extra" + b"b" * 10 * 2 ** 20
+
+    # Keep Head Metadata
+    head = dict(
+        CacheControl='public',
+        ContentDisposition='string',
+        ContentEncoding='gzip',
+        ContentLanguage='ru-RU',
+        ContentMD5='string',
+        ContentType='text/csv',
+        Expires=datetime.datetime(2015, 1, 1),
+        Metadata={
+            'string': 'string'
+        },
+        ServerSideEncryption='AES256',
+        StorageClass='REDUCED_REDUNDANCY',
+        WebsiteRedirectLocation='https://www.example.com/',
+        SSECustomerAlgorithm='AES256',
+        BucketKeyEnabled=False,
+        ObjectLockMode='GOVERNANCE',
+        ObjectLockRetainUntilDate=datetime.datetime(2015, 1, 1),
+        ObjectLockLegalHoldStatus='ON',
+    )
+    with s3.open(a, "wb", **head) as f:
+        f.write(b"data")
+
+    with s3.open(a, "ab") as f:
+        f.write(b"other")
+
+    with s3.open(a) as f:
+        filehead = {
+            k: v for k, v in f._call_s3(
+                "head_object", f.kwargs, Bucket=f.bucket, Key=f.key
+            ).items() if k in head
+        }
+        assert filehead == head, f"""file head in append are different:
+{[[k, v, "!=", filehead.get(k)] for k, v in head.items()]}
+"""
 
 
 def test_bigger_than_block_read(s3):

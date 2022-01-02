@@ -1042,7 +1042,7 @@ class S3FileSystem(AsyncFileSystem):
                     "size": out["ContentLength"],
                     "name": "/".join([bucket, key]),
                     "type": "file",
-                    "StorageClass": "STANDARD",
+                    "StorageClass": out.get("StorageClass", "STANDARD"),
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
@@ -1814,13 +1814,33 @@ class S3File(AbstractBufferedFile):
         self.append_block = False
 
         if "a" in mode and s3.exists(path):
-            loc = s3.info(path)["size"]
+            head = {
+                k: v for k, v in self._call_s3(
+                    "head_object", self.kwargs, Bucket=bucket, Key=key,
+                    **version_id_kw(version_id), **self.req_kw
+                ).items() if k in {
+                    "CacheControl", "ContentDisposition", "ContentEncoding",
+                    "ContentLanguage", "ContentLength", "ContentMD5",
+                    "ContentType", "Expires", "WebsiteRedirectLocation",
+                    "ServerSideEncryption",
+                    "SSECustomerAlgorithm", "SSEKMSKeyId",
+                    "BucketKeyEnabled", "StorageClass",
+                    "ObjectLockMode", "ObjectLockRetainUntilDate",
+                    "ObjectLockLegalHoldStatus",
+                    "Metadata"
+                }
+            }
+
+            loc = head.pop("ContentLength")
             if loc < 5 * 2 ** 20:
                 # existing file too small for multi-upload: download
                 self.write(self.fs.cat(self.path))
             else:
                 self.append_block = True
             self.loc = loc
+
+            # Reflect head
+            self.s3_additional_kwargs.update(head)
 
         if "r" in mode and "ETag" in self.details:
             self.req_kw["IfMatch"] = self.details["ETag"]
