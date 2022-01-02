@@ -1820,7 +1820,7 @@ class S3File(AbstractBufferedFile):
                     **version_id_kw(version_id), **self.req_kw
                 ).items() if k in {
                     "CacheControl", "ContentDisposition", "ContentEncoding",
-                    "ContentLanguage", "ContentLength", "ContentMD5",
+                    "ContentLanguage", "ContentLength",
                     "ContentType", "Expires", "WebsiteRedirectLocation",
                     "ServerSideEncryption",
                     "SSECustomerAlgorithm", "SSEKMSKeyId",

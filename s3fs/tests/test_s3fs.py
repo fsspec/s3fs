@@ -15,6 +15,8 @@ import pytest
 import moto
 from itertools import chain
 import fsspec.core
+from dateutil.tz import tzutc
+
 import s3fs.core
 from s3fs.core import S3FileSystem
 from s3fs.utils import ignoring, SSEParams
@@ -1257,16 +1259,14 @@ def test_append(s3):
         ContentDisposition='string',
         ContentEncoding='gzip',
         ContentLanguage='ru-RU',
-        ContentMD5='string',
         ContentType='text/csv',
-        Expires=datetime.datetime(2015, 1, 1),
+        Expires=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=tzutc()),
         Metadata={
             'string': 'string'
         },
         ServerSideEncryption='AES256',
         StorageClass='REDUCED_REDUNDANCY',
         WebsiteRedirectLocation='https://www.example.com/',
-        SSECustomerAlgorithm='AES256',
         BucketKeyEnabled=False,
     )
     with s3.open(a, "wb", **head) as f:
@@ -1281,9 +1281,7 @@ def test_append(s3):
                 "head_object", f.kwargs, Bucket=f.bucket, Key=f.key
             ).items() if k in head
         }
-        assert filehead == head, f"""file head in append are different:
-{[[k, v, "!=", filehead.get(k)] for k, v in head.items()]}
-"""
+        assert filehead == head
 
 
 def test_bigger_than_block_read(s3):
