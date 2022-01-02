@@ -1268,9 +1268,6 @@ def test_append(s3):
         WebsiteRedirectLocation='https://www.example.com/',
         SSECustomerAlgorithm='AES256',
         BucketKeyEnabled=False,
-        ObjectLockMode='GOVERNANCE',
-        ObjectLockRetainUntilDate=datetime.datetime(2015, 1, 1),
-        ObjectLockLegalHoldStatus='ON',
     )
     with s3.open(a, "wb", **head) as f:
         f.write(b"data")
