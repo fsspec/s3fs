@@ -1815,19 +1815,34 @@ class S3File(AbstractBufferedFile):
 
         if "a" in mode and s3.exists(path):
             head = {
-                k: v for k, v in self._call_s3(
-                    "head_object", self.kwargs, Bucket=bucket, Key=key,
-                    **version_id_kw(version_id), **self.req_kw
-                ).items() if k in {
-                    "CacheControl", "ContentDisposition", "ContentEncoding",
-                    "ContentLanguage", "ContentLength",
-                    "ContentType", "Expires", "WebsiteRedirectLocation",
+                k: v
+                for k, v in self._call_s3(
+                    "head_object",
+                    self.kwargs,
+                    Bucket=bucket,
+                    Key=key,
+                    **version_id_kw(version_id),
+                    **self.req_kw
+                ).items()
+                if k
+                in {
+                    "CacheControl",
+                    "ContentDisposition",
+                    "ContentEncoding",
+                    "ContentLanguage",
+                    "ContentLength",
+                    "ContentType",
+                    "Expires",
+                    "WebsiteRedirectLocation",
                     "ServerSideEncryption",
-                    "SSECustomerAlgorithm", "SSEKMSKeyId",
-                    "BucketKeyEnabled", "StorageClass",
-                    "ObjectLockMode", "ObjectLockRetainUntilDate",
+                    "SSECustomerAlgorithm",
+                    "SSEKMSKeyId",
+                    "BucketKeyEnabled",
+                    "StorageClass",
+                    "ObjectLockMode",
+                    "ObjectLockRetainUntilDate",
                     "ObjectLockLegalHoldStatus",
-                    "Metadata"
+                    "Metadata",
                 }
             }
 

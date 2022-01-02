@@ -1255,18 +1255,16 @@ def test_append(s3):
 
     # Keep Head Metadata
     head = dict(
-        CacheControl='public',
-        ContentDisposition='string',
-        ContentEncoding='gzip',
-        ContentLanguage='ru-RU',
-        ContentType='text/csv',
+        CacheControl="public",
+        ContentDisposition="string",
+        ContentEncoding="gzip",
+        ContentLanguage="ru-RU",
+        ContentType="text/csv",
         Expires=datetime.datetime(2015, 1, 1, 0, 0, tzinfo=tzutc()),
-        Metadata={
-            'string': 'string'
-        },
-        ServerSideEncryption='AES256',
-        StorageClass='REDUCED_REDUNDANCY',
-        WebsiteRedirectLocation='https://www.example.com/',
+        Metadata={"string": "string"},
+        ServerSideEncryption="AES256",
+        StorageClass="REDUCED_REDUNDANCY",
+        WebsiteRedirectLocation="https://www.example.com/",
         BucketKeyEnabled=False,
     )
     with s3.open(a, "wb", **head) as f:
@@ -1277,9 +1275,11 @@ def test_append(s3):
 
     with s3.open(a) as f:
         filehead = {
-            k: v for k, v in f._call_s3(
+            k: v
+            for k, v in f._call_s3(
                 "head_object", f.kwargs, Bucket=f.bucket, Key=f.key
-            ).items() if k in head
+            ).items()
+            if k in head
         }
         assert filehead == head
 
