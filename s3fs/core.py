@@ -30,15 +30,18 @@ try:
 except ImportError:
     ClientPayloadError = None
 
+
 logger = logging.getLogger("s3fs")
 
 
 def setup_logging(level=None):
+
     setup_logger(logger=logger, level=(level or os.environ["S3FS_LOGGING_LEVEL"]))
 
 
 if "S3FS_LOGGING_LEVEL" in os.environ:
     setup_logging()
+
 
 MANAGED_COPY_THRESHOLD = 5 * 2 ** 30
 S3_RETRYABLE_ERRORS = (socket.timeout, IncompleteRead)
@@ -47,6 +50,7 @@ if ClientPayloadError is not None:
     S3_RETRYABLE_ERRORS += (ClientPayloadError,)
 
 _VALID_FILE_MODES = {"r", "w", "a", "rb", "wb", "ab"}
+
 
 key_acls = {
     "private",
@@ -171,27 +175,27 @@ class S3FileSystem(AsyncFileSystem):
     _extra_tokenize_attributes = ("default_block_size",)
 
     def __init__(
-            self,
-            anon=False,
-            key=None,
-            secret=None,
-            token=None,
-            use_ssl=True,
-            client_kwargs=None,
-            requester_pays=False,
-            default_block_size=None,
-            default_fill_cache=True,
-            default_cache_type="bytes",
-            version_aware=False,
-            config_kwargs=None,
-            s3_additional_kwargs=None,
-            session=None,
-            username=None,
-            password=None,
-            cache_regions=False,
-            asynchronous=False,
-            loop=None,
-            **kwargs
+        self,
+        anon=False,
+        key=None,
+        secret=None,
+        token=None,
+        use_ssl=True,
+        client_kwargs=None,
+        requester_pays=False,
+        default_block_size=None,
+        default_fill_cache=True,
+        default_cache_type="bytes",
+        version_aware=False,
+        config_kwargs=None,
+        s3_additional_kwargs=None,
+        session=None,
+        username=None,
+        password=None,
+        cache_regions=False,
+        asynchronous=False,
+        loop=None,
+        **kwargs
     ):
         if key and username:
             raise KeyError("Supply either key or username, not both")
@@ -478,18 +482,18 @@ class S3FileSystem(AsyncFileSystem):
     get_delegated_s3pars = sync_wrapper(_get_delegated_s3pars)
 
     def _open(
-            self,
-            path,
-            mode="rb",
-            block_size=None,
-            acl="",
-            version_id=None,
-            fill_cache=None,
-            cache_type=None,
-            autocommit=True,
-            requester_pays=None,
-            cache_options=None,
-            **kwargs
+        self,
+        path,
+        mode="rb",
+        block_size=None,
+        acl="",
+        version_id=None,
+        fill_cache=None,
+        cache_type=None,
+        autocommit=True,
+        requester_pays=None,
+        cache_options=None,
+        **kwargs
     ):
         """Open a file for reading or writing
 
@@ -561,7 +565,7 @@ class S3FileSystem(AsyncFileSystem):
         )
 
     async def _lsdir(
-            self, path, refresh=False, max_items=None, delimiter="/", prefix=""
+        self, path, refresh=False, max_items=None, delimiter="/", prefix=""
     ):
         bucket, key, _ = self.split_path(path)
         if not prefix:
@@ -912,7 +916,7 @@ class S3FileSystem(AsyncFileSystem):
                     Bucket=bucket,
                     PartNumber=i + 1,
                     UploadId=mpu["UploadId"],
-                    Body=data[off: off + chunksize],
+                    Body=data[off : off + chunksize],
                     Key=key,
                 )
                 for i, off in enumerate(range(0, len(data), chunksize))
@@ -1060,9 +1064,9 @@ class S3FileSystem(AsyncFileSystem):
                 **self.req_kw,
             )
             if (
-                    out.get("KeyCount", 0) > 0
-                    or out.get("Contents", [])
-                    or out.get("CommonPrefixes", [])
+                out.get("KeyCount", 0) > 0
+                or out.get("Contents", [])
+                or out.get("CommonPrefixes", [])
             ):
                 return {
                     "Key": "/".join([bucket, key]),
@@ -1631,7 +1635,7 @@ class S3FileSystem(AsyncFileSystem):
         # TODO: fails if more than one bucket in list
         await asyncio.gather(
             *[
-                self._bulk_delete(files[i: i + 1000])
+                self._bulk_delete(files[i : i + 1000])
                 for i in range(0, len(files), 1000)
             ]
         )
@@ -1752,19 +1756,19 @@ class S3File(AbstractBufferedFile):
     part_max = 5 * 2 ** 30
 
     def __init__(
-            self,
-            s3,
-            path,
-            mode="rb",
-            block_size=5 * 2 ** 20,
-            acl="",
-            version_id=None,
-            fill_cache=True,
-            s3_additional_kwargs=None,
-            autocommit=True,
-            cache_type="bytes",
-            requester_pays=False,
-            cache_options=None,
+        self,
+        s3,
+        path,
+        mode="rb",
+        block_size=5 * 2 ** 20,
+        acl="",
+        version_id=None,
+        fill_cache=True,
+        s3_additional_kwargs=None,
+        autocommit=True,
+        cache_type="bytes",
+        requester_pays=False,
+        cache_options=None,
     ):
         bucket, key, path_version_id = s3.split_path(path)
         if not key:
@@ -1827,25 +1831,25 @@ class S3File(AbstractBufferedFile):
                     **self.req_kw,
                 ).items()
                 if (k
-                    in {
-                        "CacheControl",
-                        "ContentDisposition",
-                        "ContentEncoding",
-                        "ContentLanguage",
-                        "ContentLength",
-                        "ContentType",
-                        "Expires",
-                        "WebsiteRedirectLocation",
-                        "ServerSideEncryption",
-                        "SSECustomerAlgorithm",
-                        "SSEKMSKeyId",
-                        "BucketKeyEnabled",
-                        "StorageClass",
-                        "ObjectLockMode",
-                        "ObjectLockRetainUntilDate",
-                        "ObjectLockLegalHoldStatus",
-                        "Metadata",
-                    } and k not in self.s3_additional_kwargs)
+                in {
+                    "CacheControl",
+                    "ContentDisposition",
+                    "ContentEncoding",
+                    "ContentLanguage",
+                    "ContentLength",
+                    "ContentType",
+                    "Expires",
+                    "WebsiteRedirectLocation",
+                    "ServerSideEncryption",
+                    "SSECustomerAlgorithm",
+                    "SSEKMSKeyId",
+                    "BucketKeyEnabled",
+                    "StorageClass",
+                    "ObjectLockMode",
+                    "ObjectLockRetainUntilDate",
+                    "ObjectLockLegalHoldStatus",
+                    "Metadata",
+                } and k not in self.s3_additional_kwargs)
             }
 
             loc = head.pop("ContentLength")
@@ -1956,10 +1960,10 @@ class S3File(AbstractBufferedFile):
             % (self, final, self.loc, self.buffer.tell())
         )
         if (
-                self.autocommit
-                and not self.append_block
-                and final
-                and self.tell() < self.blocksize
+            self.autocommit
+            and not self.append_block
+            and final
+            and self.tell() < self.blocksize
         ):
             # only happens when closing small file, use on-shot PUT
             data1 = False
