@@ -1830,26 +1830,29 @@ class S3File(AbstractBufferedFile):
                     **version_id_kw(version_id),
                     **self.req_kw,
                 ).items()
-                if (k
-                in {
-                    "CacheControl",
-                    "ContentDisposition",
-                    "ContentEncoding",
-                    "ContentLanguage",
-                    "ContentLength",
-                    "ContentType",
-                    "Expires",
-                    "WebsiteRedirectLocation",
-                    "ServerSideEncryption",
-                    "SSECustomerAlgorithm",
-                    "SSEKMSKeyId",
-                    "BucketKeyEnabled",
-                    "StorageClass",
-                    "ObjectLockMode",
-                    "ObjectLockRetainUntilDate",
-                    "ObjectLockLegalHoldStatus",
-                    "Metadata",
-                } and k not in self.s3_additional_kwargs)
+                if (
+                    k
+                    in {
+                        "CacheControl",
+                        "ContentDisposition",
+                        "ContentEncoding",
+                        "ContentLanguage",
+                        "ContentLength",
+                        "ContentType",
+                        "Expires",
+                        "WebsiteRedirectLocation",
+                        "ServerSideEncryption",
+                        "SSECustomerAlgorithm",
+                        "SSEKMSKeyId",
+                        "BucketKeyEnabled",
+                        "StorageClass",
+                        "ObjectLockMode",
+                        "ObjectLockRetainUntilDate",
+                        "ObjectLockLegalHoldStatus",
+                        "Metadata",
+                    }
+                    and k not in self.s3_additional_kwargs
+                )
             }
 
             loc = head.pop("ContentLength")
