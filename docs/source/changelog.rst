@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2022.01.0
+---------
+
+- aiobotocore dep to 2.1.0 (#564)
+- docs for non-aws (#567)
+- ContentType in info (#570)
+- small-file ACL (#574)
+
 2021.11.1
 ---------
 
