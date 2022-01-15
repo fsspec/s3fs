@@ -946,7 +946,7 @@ class S3FileSystem(AsyncFileSystem):
         size = os.path.getsize(lpath)
 
         content_type = mimetypes.guess_type(lpath)
-        kwargs.set("ExtraArgs", {'ContentType': content_type})
+        kwargs.update({"ContentType": content_type[0]})
 
         with open(lpath, "rb") as f0:
             if size < min(5 * 2 ** 30, 2 * chunksize):
