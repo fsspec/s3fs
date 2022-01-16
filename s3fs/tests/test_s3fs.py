@@ -699,7 +699,7 @@ def test_content_type_is_set(s3, tmpdir):
     destination = os.path.join(test_bucket_name, "test.json")
     open(test_file, "w").write("text")
     s3.put(test_file, destination)
-    assert s3.info(destination)["ContentType"] == "text/json"
+    assert s3.info(destination)["ContentType"] == "application/json"
 
 def test_content_type_is_not_overrided(s3, tmpdir):
     test_file = os.path.join(str(tmpdir), "test.json")
