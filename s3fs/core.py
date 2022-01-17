@@ -1036,9 +1036,7 @@ class S3FileSystem(AsyncFileSystem):
                 )
                 return {
                     "ETag": out["ETag"],
-                    "Key": "/".join([bucket, key]),
                     "LastModified": out["LastModified"],
-                    "Size": out["ContentLength"],
                     "size": out["ContentLength"],
                     "name": "/".join([bucket, key]),
                     "type": "file",
@@ -1069,10 +1067,8 @@ class S3FileSystem(AsyncFileSystem):
                 or out.get("CommonPrefixes", [])
             ):
                 return {
-                    "Key": "/".join([bucket, key]),
                     "name": "/".join([bucket, key]),
                     "type": "directory",
-                    "Size": 0,
                     "size": 0,
                     "StorageClass": "DIRECTORY",
                 }
