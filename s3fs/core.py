@@ -945,10 +945,10 @@ class S3FileSystem(AsyncFileSystem):
                 await self._mkdir(lpath)
         size = os.path.getsize(lpath)
 
-        content_type, _ = mimetypes.guess_type(lpath)
-
-        if content_type is not None:
-            kwargs.setdefault("ContentType", content_type)
+        if "ContentType" not in kwargs:
+            content_type, _ = mimetypes.guess_type(lpath)
+            if content_type is not None:
+                kwargs["ContentType"] = content_type
 
         with open(lpath, "rb") as f0:
             if size < min(5 * 2 ** 30, 2 * chunksize):

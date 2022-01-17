@@ -695,8 +695,8 @@ def test_s3_file_info(s3):
         s3.info(fn + "another")
 
 def test_content_type_is_set(s3, tmpdir):
-    test_file = os.path.join(str(tmpdir), "test.json")
-    destination = os.path.join(test_bucket_name, "test.json")
+    test_file = str(tmpdir) + "/test.json"
+    destination = test_bucket_name + "/test.json"
     open(test_file, "w").write("text")
     s3.put(test_file, destination)
     assert s3.info(destination)["ContentType"] == "application/json"
