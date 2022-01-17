@@ -694,6 +694,7 @@ def test_s3_file_info(s3):
     with pytest.raises(FileNotFoundError):
         s3.info(fn + "another")
 
+
 def test_content_type_is_set(s3, tmpdir):
     test_file = str(tmpdir) + "/test.json"
     destination = test_bucket_name + "/test.json"
@@ -701,12 +702,14 @@ def test_content_type_is_set(s3, tmpdir):
     s3.put(test_file, destination)
     assert s3.info(destination)["ContentType"] == "application/json"
 
+
 def test_content_type_is_not_overrided(s3, tmpdir):
     test_file = os.path.join(str(tmpdir), "test.json")
     destination = os.path.join(test_bucket_name, "test.json")
     open(test_file, "w").write("text")
     s3.put(test_file, destination, ContentType="text/css")
     assert s3.info(destination)["ContentType"] == "text/css"
+
 
 def test_bucket_exists(s3):
     assert s3.exists(test_bucket_name)
