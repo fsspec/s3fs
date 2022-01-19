@@ -1324,7 +1324,6 @@ def _get_s3_id(s3):
     return id(s3.s3)
 
 
-@pytest.mark.skipif(sys.version_info[:2] < (3, 7), reason="ctx method only >py37")
 @pytest.mark.parametrize(
     "method",
     [
@@ -1857,7 +1856,6 @@ def test_modified(s3):
         s3.modified(path=test_bucket_name)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_s3(s3):
     async def _():
         s3 = S3FileSystem(
@@ -1904,7 +1902,6 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, start=-5) == data[-5:]
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_s3_old(s3):
     async def _():
         s3 = S3FileSystem(
@@ -1961,7 +1958,6 @@ def test_with_xzarr(s3):
     nana.to_dataset().to_zarr(store=s3store, mode="w", consolidated=True, compute=True)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_async_close():
     async def _():
         loop = asyncio.get_event_loop()
@@ -2141,7 +2137,6 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     s3.rm(test_file1)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_sync_from_wihin_async(s3):
     # if treating as sync but within an even loop, e.g., calling from jupyter;
     # IO happens on dedicated thread.

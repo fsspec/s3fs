@@ -1,6 +1,6 @@
 import errno
 import logging
-from contextlib import contextmanager
+from contextlib import contextmanager, AsyncExitStack
 from botocore.exceptions import ClientError
 
 
@@ -13,32 +13,6 @@ def ignoring(*exceptions):
         yield
     except exceptions:
         pass
-
-
-try:
-    from contextlib import AsyncExitStack
-except ImportError:
-    # Since AsyncExitStack is not available for 3.6<=
-    # we'll create a simple implementation that imitates
-    # the basic functionality.
-    class AsyncExitStack:
-        def __init__(self):
-            self.contexts = []
-
-        async def enter_async_context(self, context):
-            self.contexts.append(context)
-            return await context.__aenter__()
-
-        async def aclose(self, *args):
-            args = args or (None, None, None)
-            for context in self.contexts:
-                await context.__aexit__(*args)
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            await self.aclose(*args)
 
 
 class S3BucketRegionCache:
