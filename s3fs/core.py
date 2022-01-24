@@ -214,7 +214,8 @@ class S3FileSystem(AsyncFileSystem):
         self.kwargs = kwargs
         super_kwargs = {
             k: kwargs.pop(k)
-            for k in ["use_listings_cache", "listings_expiry_time", "max_paths"]
+            for k in ["use_listings_cache", "listings_expiry_time", "max_paths",
+                      "skip_instance_cache"]
             if k in kwargs
         }  # passed to fsspec superclass
         super().__init__(loop=loop, asynchronous=asynchronous, **super_kwargs)
