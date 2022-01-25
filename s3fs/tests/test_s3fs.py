@@ -1228,7 +1228,6 @@ def test_append(s3):
     with s3.open(test_bucket_name + "/nested/file1", "ab") as f:
         assert f.tell() == len(data)  # append, no write, small file
     assert s3.cat(test_bucket_name + "/nested/file1") == data
-
     with s3.open(test_bucket_name + "/nested/file1", "ab") as f:
         f.write(b"extra")  # append, write, small file
     assert s3.cat(test_bucket_name + "/nested/file1") == data + b"extra"
