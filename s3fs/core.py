@@ -937,6 +937,7 @@ class S3FileSystem(AsyncFileSystem):
                     PartNumber=i + 1,
                     UploadId=mpu["UploadId"],
                     Body=data[off : off + chunksize],
+                    ACL=self.acl,
                     Key=key,
                 )
                 for i, off in enumerate(range(0, len(data), chunksize))
@@ -1999,6 +2000,7 @@ class S3File(AbstractBufferedFile):
                 PartNumber=part,
                 UploadId=self.mpu["UploadId"],
                 Body=data0,
+                ACL=self.acl,
                 Key=key,
             )
 
