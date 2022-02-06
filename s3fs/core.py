@@ -13,6 +13,7 @@ from urllib3.exceptions import IncompleteRead
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_storage_options, tokenize, setup_logging as setup_logger
 from fsspec.asyn import AsyncFileSystem, sync, sync_wrapper, FSTimeoutError
+from fsspec.callbacks import _DEFAULT_CALLBACK
 
 import aiobotocore
 import botocore
@@ -954,7 +955,7 @@ class S3FileSystem(AsyncFileSystem):
             )
         self.invalidate_cache(path)
 
-    async def _put_file(self, lpath, rpath, chunksize=50 * 2 ** 20, **kwargs):
+    async def _put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, chunksize=50 * 2 ** 20, **kwargs):
         bucket, key, _ = self.split_path(rpath)
         if os.path.isdir(lpath):
             if key:
@@ -963,6 +964,7 @@ class S3FileSystem(AsyncFileSystem):
             else:
                 await self._mkdir(lpath)
         size = os.path.getsize(lpath)
+        callback.set_size(size)
 
         if "ContentType" not in kwargs:
             content_type, _ = mimetypes.guess_type(lpath)
@@ -974,6 +976,7 @@ class S3FileSystem(AsyncFileSystem):
                 await self._call_s3(
                     "put_object", Bucket=bucket, Key=key, Body=f0, **kwargs
                 )
+                callback.relative_update(size)
             else:
 
                 mpu = await self._call_s3(
@@ -995,6 +998,7 @@ class S3FileSystem(AsyncFileSystem):
                             Key=key,
                         )
                     )
+                    callback.relative_update(len(chunk))
 
                 parts = [
                     {"PartNumber": i + 1, "ETag": o["ETag"]} for i, o in enumerate(out)
@@ -1010,7 +1014,7 @@ class S3FileSystem(AsyncFileSystem):
             self.invalidate_cache(rpath)
             rpath = self._parent(rpath)
 
-    async def _get_file(self, rpath, lpath, version_id=None):
+    async def _get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None):
         bucket, key, vers = self.split_path(rpath)
         if os.path.isdir(lpath):
             return
@@ -1022,13 +1026,15 @@ class S3FileSystem(AsyncFileSystem):
             **self.req_kw,
         )
         body = resp["Body"]
+        callback.set_size(resp.get("ContentLength", None))
         try:
             with open(lpath, "wb") as f0:
                 while True:
                     chunk = await body.read(2 ** 16)
                     if not chunk:
                         break
-                    f0.write(chunk)
+                    segment_len = f0.write(chunk)
+                    callback.relative_update(segment_len)
         finally:
             body.close()
 
