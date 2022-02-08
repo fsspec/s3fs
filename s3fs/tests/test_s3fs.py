@@ -22,6 +22,7 @@ from s3fs.core import S3FileSystem
 from s3fs.utils import ignoring, SSEParams
 from botocore.exceptions import NoCredentialsError
 from fsspec.asyn import sync
+from fsspec.callbacks import Callback
 from packaging import version
 
 test_bucket_name = "test"
@@ -905,6 +906,54 @@ def test_get_put_big(s3, tmpdir):
     test_file = str(tmpdir.join("test2"))
     s3.get(test_bucket_name + "/bigfile", test_file)
     assert open(test_file, "rb").read() == data
+
+
+def test_get_put_with_callback(s3, tmpdir):
+    test_file = str(tmpdir.join("test.json"))
+
+    class BranchingCallback(Callback):
+        def call(self, *args, **kwargs):
+            if not args:
+                return
+            method, *args = args
+            getattr(self, method)(*args, **kwargs)
+
+        def lazy_call(self, method, func, *args, **kwargs):
+            getattr(self, method)(func(*args, **kwargs))
+
+        def branch(self, path_1, path_2, kwargs):
+            kwargs["callback"] = BranchingCallback()
+
+    cb = BranchingCallback()
+    s3.get(test_bucket_name + "/test/accounts.1.json", test_file, callback=cb)
+    assert cb.size == 1
+    assert cb.value == 1
+
+    cb = BranchingCallback()
+    s3.put(test_file, test_bucket_name + "/temp", callback=cb)
+    assert cb.size == 1
+    assert cb.value == 1
+
+
+def test_get_file_with_callback(s3, tmpdir):
+    test_file = str(tmpdir.join("test.json"))
+
+    cb = Callback()
+    s3.get_file(test_bucket_name + "/test/accounts.1.json", test_file, callback=cb)
+    assert cb.size == os.stat(test_file).st_size
+    assert cb.value == cb.size
+
+
+@pytest.mark.parametrize("size", [2**10, 10 * 2**20])
+def test_put_file_with_callback(s3, tmpdir, size):
+    test_file = str(tmpdir.join("test.json"))
+    with open(test_file, "wb") as f:
+        f.write(b"1234567890A" * size)
+
+    cb = Callback()
+    s3.put_file(test_file, test_bucket_name + "/temp", callback=cb)
+    assert cb.size == os.stat(test_file).st_size
+    assert cb.value == cb.size
 
 
 @pytest.mark.parametrize("size", [2 ** 10, 2 ** 20, 10 * 2 ** 20])
