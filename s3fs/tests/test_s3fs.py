@@ -164,7 +164,7 @@ def expect_errno(expected_errno):
 
 
 def test_simple(s3):
-    data = b"a" * (10 * 2 ** 20)
+    data = b"a" * (10 * 2**20)
 
     with s3.open(a, "wb") as f:
         f.write(data)
@@ -177,7 +177,7 @@ def test_simple(s3):
 
 @pytest.mark.parametrize("default_cache_type", ["none", "bytes", "mmap"])
 def test_default_cache_type(s3, default_cache_type):
-    data = b"a" * (10 * 2 ** 20)
+    data = b"a" * (10 * 2**20)
     s3 = S3FileSystem(
         anon=False,
         default_cache_type=default_cache_type,
@@ -863,16 +863,16 @@ def test_copy(s3):
 
 
 def test_copy_managed(s3):
-    data = b"abc" * 12 * 2 ** 20
+    data = b"abc" * 12 * 2**20
     fn = test_bucket_name + "/test/biggerfile"
     with s3.open(fn, "wb") as f:
         f.write(data)
-    sync(s3.loop, s3._copy_managed, fn, fn + "2", size=len(data), block=5 * 2 ** 20)
+    sync(s3.loop, s3._copy_managed, fn, fn + "2", size=len(data), block=5 * 2**20)
     assert s3.cat(fn) == s3.cat(fn + "2")
     with pytest.raises(ValueError):
-        sync(s3.loop, s3._copy_managed, fn, fn + "3", size=len(data), block=4 * 2 ** 20)
+        sync(s3.loop, s3._copy_managed, fn, fn + "3", size=len(data), block=4 * 2**20)
     with pytest.raises(ValueError):
-        sync(s3.loop, s3._copy_managed, fn, fn + "3", size=len(data), block=6 * 2 ** 30)
+        sync(s3.loop, s3._copy_managed, fn, fn + "3", size=len(data), block=6 * 2**30)
 
 
 @pytest.mark.parametrize("recursive", [True, False])
@@ -899,7 +899,7 @@ def test_get_put(s3, tmpdir):
 
 def test_get_put_big(s3, tmpdir):
     test_file = str(tmpdir.join("test"))
-    data = b"1234567890A" * 2 ** 20
+    data = b"1234567890A" * 2**20
     open(test_file, "wb").write(data)
 
     s3.put(test_file, test_bucket_name + "/bigfile")
@@ -956,7 +956,7 @@ def test_put_file_with_callback(s3, tmpdir, size):
     assert cb.value == cb.size
 
 
-@pytest.mark.parametrize("size", [2 ** 10, 2 ** 20, 10 * 2 ** 20])
+@pytest.mark.parametrize("size", [2**10, 2**20, 10 * 2**20])
 def test_pipe_cat_big(s3, size):
     data = b"1234567890A" * size
     s3.pipe(test_bucket_name + "/bigfile", data)
@@ -1127,7 +1127,7 @@ def test_write_small_with_acl(s3):
 
 def test_write_large(s3):
     "flush() chunks buffer when processing large singular payload"
-    mb = 2 ** 20
+    mb = 2**20
     payload_size = int(2.5 * 5 * mb)
     payload = b"0" * payload_size
 
@@ -1140,7 +1140,7 @@ def test_write_large(s3):
 
 def test_write_limit(s3):
     "flush() respects part_max when processing large singular payload"
-    mb = 2 ** 20
+    mb = 2**20
     block_size = 15 * mb
     payload_size = 44 * mb
     payload = b"0" * payload_size
@@ -1174,9 +1174,9 @@ def test_write_large_secure(s3):
     s3.mkdir("mybucket")
 
     with s3.open("mybucket/myfile", "wb") as f:
-        f.write(b"hello hello" * 10 ** 6)
+        f.write(b"hello hello" * 10**6)
 
-    assert s3.cat("mybucket/myfile") == b"hello hello" * 10 ** 6
+    assert s3.cat("mybucket/myfile") == b"hello hello" * 10**6
 
 
 def test_write_fails(s3):
@@ -1195,21 +1195,21 @@ def test_write_fails(s3):
 
 def test_write_blocks(s3):
     with s3.open(test_bucket_name + "/temp", "wb") as f:
-        f.write(b"a" * 2 * 2 ** 20)
-        assert f.buffer.tell() == 2 * 2 ** 20
+        f.write(b"a" * 2 * 2**20)
+        assert f.buffer.tell() == 2 * 2**20
         assert not (f.parts)
         f.flush()
-        assert f.buffer.tell() == 2 * 2 ** 20
+        assert f.buffer.tell() == 2 * 2**20
         assert not (f.parts)
-        f.write(b"a" * 2 * 2 ** 20)
-        f.write(b"a" * 2 * 2 ** 20)
+        f.write(b"a" * 2 * 2**20)
+        f.write(b"a" * 2 * 2**20)
         assert f.mpu
         assert f.parts
-    assert s3.info(test_bucket_name + "/temp")["size"] == 6 * 2 ** 20
-    with s3.open(test_bucket_name + "/temp", "wb", block_size=10 * 2 ** 20) as f:
-        f.write(b"a" * 15 * 2 ** 20)
+    assert s3.info(test_bucket_name + "/temp")["size"] == 6 * 2**20
+    with s3.open(test_bucket_name + "/temp", "wb", block_size=10 * 2**20) as f:
+        f.write(b"a" * 15 * 2**20)
         assert f.buffer.tell() == 0
-    assert s3.info(test_bucket_name + "/temp")["size"] == 15 * 2 ** 20
+    assert s3.info(test_bucket_name + "/temp")["size"] == 15 * 2**20
 
 
 def test_readline(s3):
@@ -1233,7 +1233,7 @@ def test_readline_empty(s3):
 
 
 def test_readline_blocksize(s3):
-    data = b"ab\n" + b"a" * (10 * 2 ** 20) + b"\nab"
+    data = b"ab\n" + b"a" * (10 * 2**20) + b"\nab"
     with s3.open(a, "wb") as f:
         f.write(data)
     with s3.open(a, "rb") as f:
@@ -1242,7 +1242,7 @@ def test_readline_blocksize(s3):
         assert result == expected
 
         result = f.readline()
-        expected = b"a" * (10 * 2 ** 20) + b"\n"
+        expected = b"a" * (10 * 2**20) + b"\n"
         assert result == expected
 
         result = f.readline()
@@ -1304,12 +1304,12 @@ def test_writable(s3):
 
 def test_merge(s3):
     with s3.open(a, "wb") as f:
-        f.write(b"a" * 10 * 2 ** 20)
+        f.write(b"a" * 10 * 2**20)
 
     with s3.open(b, "wb") as f:
-        f.write(b"a" * 10 * 2 ** 20)
+        f.write(b"a" * 10 * 2**20)
     s3.merge(test_bucket_name + "/joined", [a, b])
-    assert s3.info(test_bucket_name + "/joined")["size"] == 2 * 10 * 2 ** 20
+    assert s3.info(test_bucket_name + "/joined")["size"] == 2 * 10 * 2**20
 
 
 def test_append(s3):
@@ -1322,24 +1322,24 @@ def test_append(s3):
     assert s3.cat(test_bucket_name + "/nested/file1") == data + b"extra"
 
     with s3.open(a, "wb") as f:
-        f.write(b"a" * 10 * 2 ** 20)
+        f.write(b"a" * 10 * 2**20)
     with s3.open(a, "ab") as f:
         pass  # append, no write, big file
-    assert s3.cat(a) == b"a" * 10 * 2 ** 20
+    assert s3.cat(a) == b"a" * 10 * 2**20
 
     with s3.open(a, "ab") as f:
         assert f.parts is None
         f._initiate_upload()
         assert f.parts
-        assert f.tell() == 10 * 2 ** 20
+        assert f.tell() == 10 * 2**20
         f.write(b"extra")  # append, small write, big file
-    assert s3.cat(a) == b"a" * 10 * 2 ** 20 + b"extra"
+    assert s3.cat(a) == b"a" * 10 * 2**20 + b"extra"
 
     with s3.open(a, "ab") as f:
-        assert f.tell() == 10 * 2 ** 20 + 5
-        f.write(b"b" * 10 * 2 ** 20)  # append, big write, big file
-        assert f.tell() == 20 * 2 ** 20 + 5
-    assert s3.cat(a) == b"a" * 10 * 2 ** 20 + b"extra" + b"b" * 10 * 2 ** 20
+        assert f.tell() == 10 * 2**20 + 5
+        f.write(b"b" * 10 * 2**20)  # append, big write, big file
+        assert f.tell() == 20 * 2**20 + 5
+    assert s3.cat(a) == b"a" * 10 * 2**20 + b"extra" + b"b" * 10 * 2**20
 
     # Keep Head Metadata
     head = dict(
@@ -1461,14 +1461,14 @@ def test_upload_with_s3fs_prefix(s3):
     path = "s3://test/prefix/key"
 
     with s3.open(path, "wb") as f:
-        f.write(b"a" * (10 * 2 ** 20))
+        f.write(b"a" * (10 * 2**20))
 
     with s3.open(path, "ab") as f:
-        f.write(b"b" * (10 * 2 ** 20))
+        f.write(b"b" * (10 * 2**20))
 
 
 def test_multipart_upload_blocksize(s3):
-    blocksize = 5 * (2 ** 20)
+    blocksize = 5 * (2**20)
     expected_parts = 3
 
     s3f = s3.open(a, "wb", block_size=blocksize)
@@ -1682,26 +1682,26 @@ def test_change_defaults_only_subsequent():
         S3FileSystem.cachable = False  # don't reuse instances with same pars
 
         fs_default = S3FileSystem(client_kwargs={"endpoint_url": endpoint_uri})
-        assert fs_default.default_block_size == 5 * (1024 ** 2)
+        assert fs_default.default_block_size == 5 * (1024**2)
 
         fs_overridden = S3FileSystem(
-            default_block_size=64 * (1024 ** 2),
+            default_block_size=64 * (1024**2),
             client_kwargs={"endpoint_url": endpoint_uri},
         )
-        assert fs_overridden.default_block_size == 64 * (1024 ** 2)
+        assert fs_overridden.default_block_size == 64 * (1024**2)
 
         # Suppose I want all subsequent file systems to have a block size of 1 GiB
         # instead of 5 MiB:
-        S3FileSystem.default_block_size = 1024 ** 3
+        S3FileSystem.default_block_size = 1024**3
 
         fs_big = S3FileSystem(client_kwargs={"endpoint_url": endpoint_uri})
-        assert fs_big.default_block_size == 1024 ** 3
+        assert fs_big.default_block_size == 1024**3
 
         # Test the other file systems created to see if their block sizes changed
-        assert fs_overridden.default_block_size == 64 * (1024 ** 2)
-        assert fs_default.default_block_size == 5 * (1024 ** 2)
+        assert fs_overridden.default_block_size == 64 * (1024**2)
+        assert fs_default.default_block_size == 5 * (1024**2)
     finally:
-        S3FileSystem.default_block_size = 5 * (1024 ** 2)
+        S3FileSystem.default_block_size = 5 * (1024**2)
         S3FileSystem.cachable = True
 
 
@@ -2191,12 +2191,12 @@ def test_raise_exception_when_file_has_changed_during_reading(s3):
 def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     # Set this to a lower value so that we can actually
     # test this without creating giant objects in memory
-    monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2 ** 20)
+    monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
 
     test_file1 = test_bucket_name + "/test/multipart-upload.txt"
     test_file2 = test_bucket_name + "/test/multipart-upload-copy.txt"
 
-    with s3.open(test_file1, "wb", block_size=5 * 2 ** 21) as stream:
+    with s3.open(test_file1, "wb", block_size=5 * 2**21) as stream:
         for _ in range(5):
             stream.write(b"b" * (stream.blocksize + random.randrange(200)))
 

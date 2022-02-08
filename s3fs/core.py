@@ -45,7 +45,7 @@ if "S3FS_LOGGING_LEVEL" in os.environ:
     setup_logging()
 
 
-MANAGED_COPY_THRESHOLD = 5 * 2 ** 30
+MANAGED_COPY_THRESHOLD = 5 * 2**30
 S3_RETRYABLE_ERRORS = (socket.timeout, IncompleteRead)
 
 if ClientPayloadError is not None:
@@ -191,7 +191,7 @@ class S3FileSystem(AsyncFileSystem):
     connect_timeout = 5
     retries = 5
     read_timeout = 15
-    default_block_size = 5 * 2 ** 20
+    default_block_size = 5 * 2**20
     protocol = ["s3", "s3a"]
     _extra_tokenize_attributes = ("default_block_size",)
 
@@ -284,7 +284,7 @@ class S3FileSystem(AsyncFileSystem):
             except S3_RETRYABLE_ERRORS as e:
                 logger.debug("Retryable error: %s", e)
                 err = e
-                await asyncio.sleep(min(1.7 ** i * 0.1, 15))
+                await asyncio.sleep(min(1.7**i * 0.1, 15))
             except Exception as e:
                 logger.debug("Nonretryable error: %s", e)
                 err = e
@@ -917,11 +917,11 @@ class S3FileSystem(AsyncFileSystem):
         resp["Body"].close()
         return data
 
-    async def _pipe_file(self, path, data, chunksize=50 * 2 ** 20, **kwargs):
+    async def _pipe_file(self, path, data, chunksize=50 * 2**20, **kwargs):
         bucket, key, _ = self.split_path(path)
         size = len(data)
         # 5 GB is the limit for an S3 PUT
-        if size < min(5 * 2 ** 30, 2 * chunksize):
+        if size < min(5 * 2**30, 2 * chunksize):
             return await self._call_s3(
                 "put_object", Bucket=bucket, Key=key, Body=data, **kwargs
             )
@@ -955,7 +955,9 @@ class S3FileSystem(AsyncFileSystem):
             )
         self.invalidate_cache(path)
 
-    async def _put_file(self, lpath, rpath, callback=_DEFAULT_CALLBACK, chunksize=50 * 2 ** 20, **kwargs):
+    async def _put_file(
+        self, lpath, rpath, callback=_DEFAULT_CALLBACK, chunksize=50 * 2**20, **kwargs
+    ):
         bucket, key, _ = self.split_path(rpath)
         if os.path.isdir(lpath):
             if key:
@@ -972,7 +974,7 @@ class S3FileSystem(AsyncFileSystem):
                 kwargs["ContentType"] = content_type
 
         with open(lpath, "rb") as f0:
-            if size < min(5 * 2 ** 30, 2 * chunksize):
+            if size < min(5 * 2**30, 2 * chunksize):
                 await self._call_s3(
                     "put_object", Bucket=bucket, Key=key, Body=f0, **kwargs
                 )
@@ -1014,7 +1016,9 @@ class S3FileSystem(AsyncFileSystem):
             self.invalidate_cache(rpath)
             rpath = self._parent(rpath)
 
-    async def _get_file(self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None):
+    async def _get_file(
+        self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None
+    ):
         bucket, key, vers = self.split_path(rpath)
         if os.path.isdir(lpath):
             return
@@ -1030,7 +1034,7 @@ class S3FileSystem(AsyncFileSystem):
         try:
             with open(lpath, "wb") as f0:
                 while True:
-                    chunk = await body.read(2 ** 16)
+                    chunk = await body.read(2**16)
                     if not chunk:
                         break
                     segment_len = f0.write(chunk)
@@ -1529,14 +1533,14 @@ class S3FileSystem(AsyncFileSystem):
         )
         self.invalidate_cache(path2)
 
-    async def _copy_managed(self, path1, path2, size, block=5 * 2 ** 30, **kwargs):
+    async def _copy_managed(self, path1, path2, size, block=5 * 2**30, **kwargs):
         """Copy file between locations on S3 as multi-part
 
         block: int
             The size of the pieces, must be larger than 5MB and at most 5GB.
             Smaller blocks mean more calls, only useful for testing.
         """
-        if block < 5 * 2 ** 20 or block > 5 * 2 ** 30:
+        if block < 5 * 2**20 or block > 5 * 2**30:
             raise ValueError("Copy block size must be 5MB<=block<=5GB")
         bucket, key, version = self.split_path(path2)
         mpu = await self._call_s3(
@@ -1780,15 +1784,15 @@ class S3File(AbstractBufferedFile):
     """
 
     retries = 5
-    part_min = 5 * 2 ** 20
-    part_max = 5 * 2 ** 30
+    part_min = 5 * 2**20
+    part_max = 5 * 2**30
 
     def __init__(
         self,
         s3,
         path,
         mode="rb",
-        block_size=5 * 2 ** 20,
+        block_size=5 * 2**20,
         acl="",
         version_id=None,
         fill_cache=True,
@@ -1813,7 +1817,7 @@ class S3File(AbstractBufferedFile):
         self.s3_additional_kwargs = s3_additional_kwargs or {}
         self.req_kw = {"RequestPayer": "requester"} if requester_pays else {}
         if "r" not in mode:
-            if block_size < 5 * 2 ** 20:
+            if block_size < 5 * 2**20:
                 raise ValueError("Block size must be >=5MB")
         else:
             if version_id and s3.version_aware:
@@ -1864,7 +1868,7 @@ class S3File(AbstractBufferedFile):
             }
 
             loc = head.pop("ContentLength")
-            if loc < 5 * 2 ** 20:
+            if loc < 5 * 2**20:
                 # existing file too small for multi-upload: download
                 self.write(self.fs.cat(self.path))
             else:
