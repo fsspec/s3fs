@@ -912,15 +912,6 @@ def test_get_put_with_callback(s3, tmpdir):
     test_file = str(tmpdir.join("test.json"))
 
     class BranchingCallback(Callback):
-        def call(self, *args, **kwargs):
-            if not args:
-                return
-            method, *args = args
-            getattr(self, method)(*args, **kwargs)
-
-        def lazy_call(self, method, func, *args, **kwargs):
-            getattr(self, method)(func(*args, **kwargs))
-
         def branch(self, path_1, path_2, kwargs):
             kwargs["callback"] = BranchingCallback()
 
