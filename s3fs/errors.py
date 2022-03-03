@@ -136,14 +136,15 @@ def translate_boto_error(error, message=None, set_cause=True, *args, **kwargs):
     An instantiated exception ready to be thrown. If the error code isn't
     recognized, an IOError with the original error message is returned.
     """
-    if not hasattr(error, "response"):
-        # non-http error:
+    error_response = getattr(error, "response", None)
+    if error_response is None:
+        # non-http error, or response is None:
         return error
-    code = error.response["Error"].get("Code")
+    code = error_response["Error"].get("Code")
     constructor = ERROR_CODE_TO_EXCEPTION.get(code)
     if constructor:
         if not message:
-            message = error.response["Error"].get("Message", str(error))
+            message = error_response["Error"].get("Message", str(error))
         custom_exc = constructor(message, *args, **kwargs)
     else:
         # No match found, wrap this in an IOError with the appropriate message.
