@@ -1,6 +1,9 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches: [master]
 
 jobs:
   test:
@@ -9,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
 
     env:
       BOTO_CONFIG: /dev/null
@@ -22,32 +25,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/setup-python@v2
         with:
-          auto-update-conda: true
-          miniconda-version: latest
-          activate-environment: test
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        shell: bash -l {0}
-        run: |
-          conda install -c conda-forge pip botocore aiobotocore==2.1.0 "aiohttp<=4" "moto>=2.0,<3" pytest flake8 black -y
-          pip install git+https://github.com/fsspec/filesystem_spec --no-deps
-          conda list
-          conda --version
+      - name: Setup Poetry
+        uses: Gr1N/setup-poetry@v7
+        with:
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install
-        shell: bash -l {0}
-        run: python setup.py install
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cache/pypoetry/virtualenvs
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+
+      - run: poetry install
 
       - name: Run Tests
-        shell: bash -l {0}
-        run: pytest -vv s3fs
+        run: poetry run pytest -vv
 
-      - name: Lint
-        shell: bash -l {0}
-        run: |
-          flake8 s3fs
-          black s3fs --check --diff
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: pre-commit/action@v2.0.3

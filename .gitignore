@@ -8,3 +8,4 @@ dist/
 *.egg-info
 build/
 venv/
+.venv/

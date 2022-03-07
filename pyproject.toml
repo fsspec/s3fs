@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "s3fs"
+version = "2022.2.0"
+description = "Convenient Filesystem interface over S3"
+authors = ["Martin Durant <mdurant@continuum.io>"]
+homepage = "http://github.com/fsspec/s3fs/"
+repository = "http://github.com/fsspec/s3fs/"
+keywords = ["s3", "boto"]
+readme = "README.rst"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+]
+license = "BSD"
+
+[tool.poetry.dependencies]
+python = ">=3.7,<4"
+aiobotocore = "~=2.1.0"
+fsspec = "==2022.2.0"
+aiohttp = "<=4"
+
+[tool.poetry.dev-dependencies]
+pytest = ">=4.2.0"
+pytest-env = "^0.6.2"
+bump2version = "^1.0.1"
+moto = {version = ">=2,<3", extras = ["server"]}
+
+[tool.pytest.ini_options]
+env = [
+    "BOTO_PATH=/dev/null",
+    "AWS_ACCESS_KEY_ID=dummy_key",
+    "AWS_SECRET_ACCESS_KEY=dummy_secret"
+]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
