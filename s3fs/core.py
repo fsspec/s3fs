@@ -46,7 +46,7 @@ if "S3FS_LOGGING_LEVEL" in os.environ:
 
 
 MANAGED_COPY_THRESHOLD = 5 * 2**30
-S3_RETRYABLE_ERRORS = (socket.timeout, HTTPClientError, IncompleteRead)
+S3_RETRYABLE_ERRORS = (socket.timeout, HTTPClientError, IncompleteRead, FSTimeoutError)
 
 if ClientPayloadError is not None:
     S3_RETRYABLE_ERRORS += (ClientPayloadError,)
@@ -83,6 +83,34 @@ key_acls = {
     "bucket-owner-full-control",
 }
 buck_acls = {"private", "public-read", "public-read-write", "authenticated-read"}
+
+
+async def _error_wrapper(func, *, args=(), kwargs=None, retries):
+    if kwargs is None:
+        kwargs = {}
+    for i in range(retries):
+        try:
+            return await func(*args, **kwargs)
+        except S3_RETRYABLE_ERRORS as e:
+            err = e
+            logger.debug("Retryable error: %s", e)
+            await asyncio.sleep(min(1.7**i * 0.1, 15))
+        except Exception as e:
+            logger.debug("Nonretryable error: %s", e)
+            err = e
+            break
+
+    if "'coroutine'" in str(err):
+        # aiobotocore internal error - fetch original botocore error
+        tb = err.__traceback__
+        while tb.tb_next:
+            tb = tb.tb_next
+        try:
+            await tb.tb_frame.f_locals["response"]
+        except Exception as e:
+            err = e
+    err = translate_boto_error(err)
+    raise err
 
 
 def version_id_kw(version_id):
@@ -277,29 +305,9 @@ class S3FileSystem(AsyncFileSystem):
         kw2.pop("Body", None)
         logger.debug("CALL: %s - %s - %s", method.__name__, akwarglist, kw2)
         additional_kwargs = self._get_s3_method_kwargs(method, *akwarglist, **kwargs)
-        for i in range(self.retries):
-            try:
-                out = await method(**additional_kwargs)
-                return out
-            except S3_RETRYABLE_ERRORS as e:
-                logger.debug("Retryable error: %s", e)
-                err = e
-                await asyncio.sleep(min(1.7**i * 0.1, 15))
-            except Exception as e:
-                logger.debug("Nonretryable error: %s", e)
-                err = e
-                break
-        if "'coroutine'" in str(err):
-            # aiobotocore internal error - fetch original botocore error
-            tb = err.__traceback__
-            while tb.tb_next:
-                tb = tb.tb_next
-            try:
-                await tb.tb_frame.f_locals["response"]
-            except Exception as e:
-                err = e
-        err = translate_boto_error(err)
-        raise err
+        return await _error_wrapper(
+            method, kwargs=additional_kwargs, retries=self.retries
+        )
 
     call_s3 = sync_wrapper(_call_s3)
 
@@ -905,17 +913,22 @@ class S3FileSystem(AsyncFileSystem):
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
-        resp = await self._call_s3(
-            "get_object",
-            Bucket=bucket,
-            Key=key,
-            **version_id_kw(version_id or vers),
-            **head,
-            **self.req_kw,
-        )
-        data = await resp["Body"].read()
-        resp["Body"].close()
-        return data
+
+        async def _call_and_read():
+            resp = await self._call_s3(
+                "get_object",
+                Bucket=bucket,
+                Key=key,
+                **version_id_kw(version_id or vers),
+                **head,
+                **self.req_kw,
+            )
+            try:
+                return await resp["Body"].read()
+            finally:
+                resp["Body"].close()
+
+        return await _error_wrapper(_call_and_read, retries=self.retries)
 
     async def _pipe_file(self, path, data, chunksize=50 * 2**20, **kwargs):
         bucket, key, _ = self.split_path(path)
@@ -1034,7 +1047,9 @@ class S3FileSystem(AsyncFileSystem):
         try:
             with open(lpath, "wb") as f0:
                 while True:
-                    chunk = await body.read(2**16)
+                    chunk = await _error_wrapper(
+                        body.read, args=(2**16,), retries=self.retries
+                    )
                     if not chunk:
                         break
                     segment_len = f0.write(chunk)
