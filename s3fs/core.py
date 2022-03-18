@@ -1071,7 +1071,7 @@ class S3FileSystem(AsyncFileSystem):
                     **self.req_kw,
                 )
                 return {
-                    "ETag": out["ETag"],
+                    "ETag": out.get("ETag", ""),
                     "LastModified": out["LastModified"],
                     "size": out["ContentLength"],
                     "name": "/".join([bucket, key]),
