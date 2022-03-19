@@ -114,6 +114,17 @@ using async-style programming, you do not need to know about how this
 works, but you might find the implementation interesting.
 
 
+Multiprocessing
+---------------
+
+When using Python's `multiprocessing`, the start method needs to be set to either
+``spawn`` or ``forkserver``. ``fork`` is not safe to use and may lead to 
+hard-to-find bugs and occasional deadlocks. Read more about the available 
+`start methods`.
+
+.. _multiprocessing: https://docs.python.org/3/library/multiprocessing.html
+.. _start methods: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+
 Limitations
 -----------
 
