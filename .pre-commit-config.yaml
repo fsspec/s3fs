@@ -14,4 +14,4 @@ repos:
     rev: '4.0.1'
     hooks:
       - id: flake8
-        exclude: ^tests/|^docs/|__init__.py
+        exclude: tests/|^docs/|__init__.py

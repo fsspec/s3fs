@@ -119,7 +119,7 @@ Version 0.4.0
 - Always use multipart uploads when not autocommitting (:pr:`243`) by `Marius van Niekerk`_
 - Create ``CONTRIBUTING.md`` (:pr:`248`) by `Jacob Tomlinson`_
 - Use autofunction for ``S3Map`` sphinx autosummary (:pr:`251`) by `James Bourbeau`_
-- Miscellaneous doc updates (:pr:`252`) by `James Bourbeau`_ 
+- Miscellaneous doc updates (:pr:`252`) by `James Bourbeau`_
 - Support for Python 3.8 (:pr:`264`) by `Tom Augspurger`_
 - Improved performance for ``isdir`` (:pr:`259`) by `Nate Yoder`_
 * Increased the minimum required version of fsspec to 0.6.0

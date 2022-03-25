@@ -1,5 +1,5 @@
 [run]
-include = 
+include =
     s3fs/*
 
 omit =
@@ -10,4 +10,3 @@ show_missing = True
 
 [html]
 directory = coverage_html_report
-
