@@ -1032,30 +1032,64 @@ class S3FileSystem(AsyncFileSystem):
     async def _get_file(
         self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None
     ):
-        bucket, key, vers = self.split_path(rpath)
         if os.path.isdir(lpath):
             return
-        resp = await self._call_s3(
-            "get_object",
-            Bucket=bucket,
-            Key=key,
-            **version_id_kw(version_id or vers),
-            **self.req_kw,
-        )
-        body = resp["Body"]
-        callback.set_size(resp.get("ContentLength", None))
+        bucket, key, vers = self.split_path(rpath)
+
+        async def _open_file(range: int):
+            resp = await self._call_s3(
+                "get_object",
+                Bucket=bucket,
+                Key=key,
+                Range=f'{range}-',
+                **version_id_kw(version_id or vers),
+                **self.req_kw,
+            )
+            return resp["Body"], resp.get("ContentLength", None)
+
+        body, content_length = _open_file(range=0)
+        callback.set_size(content_length)
+
+        failed_reads = 0
+        bytes_read = 0
+
         try:
             with open(lpath, "wb") as f0:
                 while True:
-                    chunk = await _error_wrapper(
-                        body.read, args=(2**16,), retries=self.retries
-                    )
+                    try:
+                        chunk = await body.read(2**16)
+                    except S3_RETRYABLE_ERRORS:
+                        failed_reads += 1
+                        if failed_reads >= self.retries:
+                            # Give up if we've failed too many times.
+                            raise
+                        # Closing the body may result in an exception if we've failed to read from it.
+                        try:
+                            body.close()
+                        except Exception:
+                            pass
+
+                        await asyncio.sleep(min(1.7 ** failed_reads * 0.1, 15))
+                        # Byte ranges are inclusive, which means we need to be careful to not read the same data twice
+                        # in a failure.
+                        # Examples:
+                        # Read 1 byte -> failure, retry with read_range=0, byte range should be 0-
+                        # Read 1 byte, success. Read 1 byte: failure. Retry with read_range=2, byte-range should be 2-
+                        # Read 1 bytes, success. Read 1 bytes: success. Read 1 byte, failure. Retry with read_range=3,
+                        # byte-range should be 3-.
+                        body, _ = _open_file(bytes_read + 1)
+                        continue
+
                     if not chunk:
                         break
+                    bytes_read += len(chunk)
                     segment_len = f0.write(chunk)
                     callback.relative_update(segment_len)
         finally:
-            body.close()
+            try:
+                body.close()
+            except Exception:
+                pass
 
     async def _info(self, path, bucket=None, key=None, refresh=False, version_id=None):
         path = self._strip_protocol(path)
