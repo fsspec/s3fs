@@ -1047,7 +1047,7 @@ class S3FileSystem(AsyncFileSystem):
             )
             return resp["Body"], resp.get("ContentLength", None)
 
-        body, content_length = _open_file(range=0)
+        body, content_length = await _open_file(range=0)
         callback.set_size(content_length)
 
         failed_reads = 0
@@ -1077,7 +1077,7 @@ class S3FileSystem(AsyncFileSystem):
                         # Read 1 byte, success. Read 1 byte: failure. Retry with read_range=2, byte-range should be 2-
                         # Read 1 bytes, success. Read 1 bytes: success. Read 1 byte, failure. Retry with read_range=3,
                         # byte-range should be 3-.
-                        body, _ = _open_file(bytes_read + 1)
+                        body, _ = await _open_file(bytes_read + 1)
                         continue
 
                     if not chunk:
