@@ -2096,7 +2096,6 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3, bucket_names):
     s3.rm(test_file1)
 
 
-@pytest.mark.skipif(sys.version_info < (3, 7), reason="no asyncio.run in py36")
 def test_sync_from_wihin_async(s3, endpoint_uri, bucket_names):
     # if treating as sync but within an even loop, e.g., calling from jupyter;
     # IO happens on dedicated thread.
@@ -2117,23 +2116,12 @@ def test_token_paths(s3, endpoint_uri, bucket_names):
 
 
 def test_same_name_but_no_exact(s3, bucket_names):
-    s3.touch(bucket_names["test"] + "/very/similiar/prefix1")
-    s3.touch(bucket_names["test"] + "/very/similiar/prefix2")
-    s3.touch(bucket_names["test"] + "/very/similiar/prefix3/something")
-    assert not s3.exists(bucket_names["test"] + "/very/similiar/prefix")
-    assert not s3.exists(bucket_names["test"] + "/very/similiar/prefi")
-    assert not s3.exists(bucket_names["test"] + "/very/similiar/pref")
-
-    assert s3.exists(bucket_names["test"] + "/very/similiar/")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix1")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix2")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3/")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3/something")
-
-    assert not s3.exists(bucket_names["test"] + "/very/similiar/prefix3/some")
-
-    s3.touch(bucket_names["test"] + "/starting/very/similiar/prefix")
+    s3.touch(bucket_names["test"] + "/very/similar/prefix1")
+    s3.touch(bucket_names["test"] + "/very/similar/prefix2")
+    s3.touch(bucket_names["test"] + "/very/similar/prefix3/something")
+    assert not s3.exists(bucket_names["test"] + "/very/similar/prefix")
+    assert not s3.exists(bucket_names["test"] + "/very/similar/prefi")
+    assert not s3.exists(bucket_names["test"] + "/very/similar/pref")
 
     assert s3.exists(bucket_names["test"] + "/very/similar/")
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix1")
@@ -2142,8 +2130,7 @@ def test_same_name_but_no_exact(s3, bucket_names):
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix3/")
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix3/something")
 
-    assert s3.exists(bucket_names["test"] + "/starting/very/similiar/prefix")
-    assert s3.exists(bucket_names["test"] + "/starting/very/similiar/prefix/")
+    assert not s3.exists(bucket_names["test"] + "/very/similar/prefix3/some")
 
     s3.touch(bucket_names["test"] + "/starting/very/similar/prefix")
 
@@ -2151,35 +2138,10 @@ def test_same_name_but_no_exact(s3, bucket_names):
     assert not s3.exists(bucket_names["test"] + "/starting/very/similar/prefix2")
     assert not s3.exists(bucket_names["test"] + "/starting/very/similar/prefix3")
     assert not s3.exists(bucket_names["test"] + "/starting/very/similar/prefix3/")
-    assert not s3.exists(
-        bucket_names["test"] + "/starting/very/similar/prefix3/something"
-    )
+    assert not s3.exists(bucket_names["test"] + "/starting/very/similar/prefix3/something")
 
-    async def list_objects_v2(*args, **kwargs):
-        if kwargs.pop("Prefix").endswith("/"):
-            return {}
-        else:
-            raise PermissionError
-
-    monkeypatch.setattr(type(s3.s3), "list_objects_v2", list_objects_v2)
-    assert not s3.exists(bucket_names["test"] + "/very/similiar/prefix1")
-    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix")
-    assert s3.info(bucket_names["test"] + "/very/similiar/prefix")["type"] == "file"
-
-
-def test_info_with_permission_error_for_list_objects(monkeypatch, s3, bucket_names):
-    s3.touch(bucket_names['test'] + "/very/similiar/prefix")
-
-    async def list_objects_v2(*args, **kwargs):
-        if kwargs.pop("Prefix").endswith("/"):
-            return {}
-        else:
-            raise PermissionError
-
-    monkeypatch.setattr(type(s3.s3), "list_objects_v2", list_objects_v2)
-    assert not s3.exists(bucket_names['test'] + "/very/similiar/prefix1")
-    assert s3.exists(bucket_names['test'] + "/very/similiar/prefix")
-    assert s3.info(bucket_names['test'] + "/very/similiar/prefix")["type"] == "file"
+    assert s3.exists(bucket_names["test"] + "/starting/very/similar/prefix")
+    assert s3.exists(bucket_names["test"] + "/starting/very/similar/prefix/")
 
 
 def test_leading_forward_slash(s3, bucket_names):
