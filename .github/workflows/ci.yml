@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         shell: bash -l {0}
         run: |
-          pip install -r test_requirements.txt
+          pip install -r requirements.txt -r test_requirements.txt
           pip install git+https://github.com/fsspec/filesystem_spec --no-deps
 
       - name: Install
