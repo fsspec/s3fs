@@ -17,9 +17,11 @@ import fsspec.core
 import s3fs.core
 from s3fs.core import S3FileSystem
 from s3fs.utils import ignoring, SSEParams
+from dateutil.tz import tzutc
 from botocore.exceptions import NoCredentialsError
 from fsspec.asyn import sync
 from packaging import version
+from fsspec.callbacks import Callback
 
 
 @contextmanager
@@ -126,6 +128,10 @@ def test_info(s3, bucket_names, file_a, file_b):
     linfo = s3.ls(file_a, detail=True)[0]
     assert abs(info.pop("LastModified") - linfo.pop("LastModified")).seconds < 1
     info.pop("VersionId")
+    info.pop("ContentType")
+    linfo.pop("Key")
+    linfo.pop("Size")
+
     assert info == linfo
     parent = file_a.rsplit("/", 1)[0]
     s3.invalidate_cache()  # remove full path from the cache
@@ -559,7 +565,7 @@ def test_s3_file_info(s3, bucket_names):
     assert fn in s3.find(bucket_names["test"])
     assert s3.exists(fn)
     assert not s3.exists(fn + "another")
-    assert s3.info(fn)["Size"] == len(data)
+    assert s3.info(fn)["size"] == len(data)
     with pytest.raises(FileNotFoundError):
         s3.info(fn + "another")
 
@@ -997,7 +1003,7 @@ def test_write_large(s3, bucket_names):
         fd.write(payload)
 
     assert s3.cat(bucket_names["test"] + "/test") == payload
-    assert s3.info(bucket_names["test"] + "/test")["Size"] == payload_size
+    assert s3.info(bucket_names["test"] + "/test")["size"] == payload_size
 
 
 def test_write_limit(s3, bucket_names):
@@ -1012,7 +1018,7 @@ def test_write_limit(s3, bucket_names):
 
     assert s3.cat(bucket_names["test"] + "/test") == payload
 
-    assert s3.info(bucket_names["test"] + "/test")["Size"] == payload_size
+    assert s3.info(bucket_names["test"] + "/test")["size"] == payload_size
 
 
 def test_write_small_secure(s3, bucket_names):
@@ -1067,11 +1073,11 @@ def test_write_blocks(s3, bucket_names):
         f.write(b"a" * 2 * 2 ** 20)
         assert f.mpu
         assert f.parts
-    assert s3.info(bucket_names["test"] + "/temp")["Size"] == 6 * 2 ** 20
+    assert s3.info(bucket_names["test"] + "/temp")["size"] == 6 * 2 ** 20
     with s3.open(bucket_names["test"] + "/temp", "wb", block_size=10 * 2 ** 20) as f:
         f.write(b"a" * 15 * 2 ** 20)
         assert f.buffer.tell() == 0
-    assert s3.info(bucket_names["test"] + "/temp")["Size"] == 15 * 2 ** 20
+    assert s3.info(bucket_names["test"] + "/temp")["size"] == 15 * 2 ** 20
 
 
 def test_readline(s3, bucket_names, s3_files):
@@ -1171,7 +1177,7 @@ def test_merge(s3, bucket_names, file_a, file_b):
     with s3.open(file_b, "wb") as f:
         f.write(b"a" * 10 * 2 ** 20)
     s3.merge(bucket_names["test"] + "/joined", [file_a, file_b])
-    assert s3.info(bucket_names["test"] + "/joined")["Size"] == 2 * 10 * 2 ** 20
+    assert s3.info(bucket_names["test"] + "/joined")["size"] == 2 * 10 * 2 ** 20
 
 
 def test_append(s3, bucket_names, s3_files, file_a):
@@ -2118,16 +2124,16 @@ def test_same_name_but_no_exact(s3, bucket_names):
     assert not s3.exists(bucket_names["test"] + "/very/similiar/prefi")
     assert not s3.exists(bucket_names["test"] + "/very/similiar/pref")
 
-    assert s3.exists(test_bucket_name + "/very/similiar/")
-    assert s3.exists(test_bucket_name + "/very/similiar/prefix1")
-    assert s3.exists(test_bucket_name + "/very/similiar/prefix2")
-    assert s3.exists(test_bucket_name + "/very/similiar/prefix3")
-    assert s3.exists(test_bucket_name + "/very/similiar/prefix3/")
-    assert s3.exists(test_bucket_name + "/very/similiar/prefix3/something")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix1")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix2")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3/")
+    assert s3.exists(bucket_names["test"] + "/very/similiar/prefix3/something")
 
-    assert not s3.exists(test_bucket_name + "/very/similiar/prefix3/some")
+    assert not s3.exists(bucket_names["test"] + "/very/similiar/prefix3/some")
 
-    s3.touch(test_bucket_name + "/starting/very/similiar/prefix")
+    s3.touch(bucket_names["test"] + "/starting/very/similiar/prefix")
 
     assert s3.exists(bucket_names["test"] + "/very/similar/")
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix1")
@@ -2136,7 +2142,7 @@ def test_same_name_but_no_exact(s3, bucket_names):
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix3/")
     assert s3.exists(bucket_names["test"] + "/very/similar/prefix3/something")
 
-    assert s3.exists(test_bucket_name + "/starting/very/similiar/prefix")
+    assert s3.exists(bucket_names["test"] + "/starting/very/similiar/prefix")
     assert s3.exists(bucket_names["test"] + "/starting/very/similiar/prefix/")
 
     s3.touch(bucket_names["test"] + "/starting/very/similar/prefix")
@@ -2158,7 +2164,7 @@ def test_same_name_but_no_exact(s3, bucket_names):
     monkeypatch.setattr(type(s3.s3), "list_objects_v2", list_objects_v2)
     assert not s3.exists(bucket_names["test"] + "/very/similiar/prefix1")
     assert s3.exists(bucket_names["test"] + "/very/similiar/prefix")
-    assert s3.info(test_bucket_name + "/very/similiar/prefix")["type"] == "file"
+    assert s3.info(bucket_names["test"] + "/very/similiar/prefix")["type"] == "file"
 
 
 def test_info_with_permission_error_for_list_objects(monkeypatch, s3, bucket_names):

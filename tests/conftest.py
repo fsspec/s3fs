@@ -7,6 +7,8 @@ import requests
 
 from s3fs import S3FileSystem
 import uuid
+import socket
+from contextlib import closing
 
 
 @pytest.fixture()
@@ -76,7 +78,13 @@ def bucket_names():
 
 @pytest.fixture(scope="session")
 def endpoint_port():
-    return 5555
+    # Find a free port.
+    # From https://stackoverflow.com/questions/1365265/on-localhost-how-do-i-pick-a-free-port-number
+    # Not perfect, but good enough
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
 
 
 @pytest.fixture(scope="session")
@@ -102,21 +110,24 @@ def s3_base(endpoint_uri, endpoint_port):
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foo"
     if "AWS_ACCESS_KEY_ID" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = "foo"
-    proc = subprocess.Popen(shlex.split("moto_server s3 -p %s" % endpoint_port))
 
-    timeout = 5
-    while timeout > 0:
-        try:
-            r = requests.get(endpoint_uri)
-            if r.ok:
-                break
-        except Exception:
-            pass
-        timeout -= 0.1
-        time.sleep(0.1)
-    yield
-    proc.terminate()
-    proc.wait()
+    with subprocess.Popen(shlex.split("moto_server s3 -p %s" % endpoint_port)) as proc:
+        timeout = 5
+        while timeout > 0:
+            exit_code = proc.poll()
+            if exit_code is not None:
+                raise RuntimeError('Server failed to start: %s' % exit_code)
+            try:
+                r = requests.get(endpoint_uri)
+                if r.ok:
+                    break
+            except Exception:
+                pass
+            timeout -= 0.1
+            time.sleep(0.1)
+        yield
+        proc.terminate()
+        proc.wait()
 
 
 @pytest.fixture()

@@ -1,5 +1,6 @@
 mock; python_version < '3.3'
-moto>=2,<3
+moto[server]>=2,<3
 flask
 pytest>=4.2.0
 pytest-env
+pytest-xdist

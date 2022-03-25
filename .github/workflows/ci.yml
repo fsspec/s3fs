@@ -33,10 +33,8 @@ jobs:
       - name: Install dependencies
         shell: bash -l {0}
         run: |
-          conda install -c conda-forge pip botocore aiobotocore==2.1.0 "aiohttp<=4" "moto>=2.0,<3" pytest flake8 black -y
+          pip install -r test_requirements.txt
           pip install git+https://github.com/fsspec/filesystem_spec --no-deps
-          conda list
-          conda --version
 
       - name: Install
         shell: bash -l {0}
@@ -44,7 +42,7 @@ jobs:
 
       - name: Run Tests
         shell: bash -l {0}
-        run: pytest -vv
+        run: pytest -vv -n 6
 
       - name: Lint
         shell: bash -l {0}
