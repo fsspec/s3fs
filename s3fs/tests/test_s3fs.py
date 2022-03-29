@@ -2274,6 +2274,19 @@ def test_lsdir(s3):
     assert d in s3.ls(test_bucket_name)
 
 
+def test_rm_recursive_folder(s3):
+    s3.touch(test_bucket_name + "/sub/file")
+    s3.rm(test_bucket_name + "/sub", recursive=True)
+    assert not s3.exists(test_bucket_name + "/sub/file")
+    assert not s3.exists(test_bucket_name + "/sub")
+
+    s3.touch(test_bucket_name + "/sub/file")
+    s3.rm(test_bucket_name, recursive=True)
+    assert not s3.exists(test_bucket_name + "/sub/file")
+    assert not s3.exists(test_bucket_name + "/sub")
+    assert not s3.exists(test_bucket_name)
+
+
 def test_copy_file_without_etag(s3, monkeypatch):
 
     s3.touch(test_bucket_name + "/copy_tests/file")
