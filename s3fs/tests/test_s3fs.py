@@ -2281,7 +2281,7 @@ def test_rm_recursive_folder(s3):
     assert not s3.exists(test_bucket_name + "/sub")
 
     s3.touch(test_bucket_name + "/sub/file")
-    s3.touch(test_bucket_name + "/sub/") # placeholder
+    s3.touch(test_bucket_name + "/sub/")  # placeholder
     s3.rm(test_bucket_name + "/sub", recursive=True)
     assert not s3.exists(test_bucket_name + "/sub/file")
     assert not s3.exists(test_bucket_name + "/sub")
@@ -2291,6 +2291,7 @@ def test_rm_recursive_folder(s3):
     assert not s3.exists(test_bucket_name + "/sub/file")
     assert not s3.exists(test_bucket_name + "/sub")
     assert not s3.exists(test_bucket_name)
+
 
 def test_copy_file_without_etag(s3, monkeypatch):
 
