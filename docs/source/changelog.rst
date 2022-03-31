@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2022.3.0
+--------
+
+- pre-commit (#612)
+- aiobotocore 2.2 (#609)
+- empty ETag (#605)
+- HTTPClientError retry (#597)
+- new callbacks support (#590)
+
 2022.02.0
 ---------
 
