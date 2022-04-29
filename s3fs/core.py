@@ -1670,7 +1670,6 @@ class S3FileSystem(AsyncFileSystem):
             subset = files[i : i + self.concurrent_batched_deletes]
             # don't bother sleeping for the last batch
             slow_down = 1 if i + self.concurrent_batched_deletes < len(files) else 0
-            print(f"Deleting subset {i}, {i+self.concurrent_batched_deletes}")
             await asyncio.gather(
                 *[
                     self._bulk_delete(subset[j : j + 1000])
