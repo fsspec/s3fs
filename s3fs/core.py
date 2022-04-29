@@ -1041,7 +1041,7 @@ class S3FileSystem(AsyncFileSystem):
                 "get_object",
                 Bucket=bucket,
                 Key=key,
-                Range=f'{range}-',
+                Range=f'bytes={range}-',
                 **version_id_kw(version_id or vers),
                 **self.req_kw,
             )
