@@ -1037,11 +1037,13 @@ class S3FileSystem(AsyncFileSystem):
         bucket, key, vers = self.split_path(rpath)
 
         async def _open_file(range: int):
+            kw = self.req_kw.copy()
+            if range:
+                kw["Range"] = f"bytes={range}-"
             resp = await self._call_s3(
                 "get_object",
                 Bucket=bucket,
                 Key=key,
-                Range=f"bytes={range}-",
                 **version_id_kw(version_id or vers),
                 **self.req_kw,
             )
