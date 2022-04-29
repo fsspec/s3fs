@@ -20,6 +20,7 @@ import botocore
 import aiobotocore.session
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError, HTTPClientError, ParamValidationError
+from botocore.parsers import ResponseParserError
 
 from s3fs.errors import translate_boto_error
 from s3fs.utils import S3BucketRegionCache, ParamKwargsHelper, _get_brange, FileExpired
@@ -46,7 +47,17 @@ if "S3FS_LOGGING_LEVEL" in os.environ:
 
 
 MANAGED_COPY_THRESHOLD = 5 * 2**30
-S3_RETRYABLE_ERRORS = (socket.timeout, HTTPClientError, IncompleteRead, FSTimeoutError)
+# Certain rate-limiting responses can send invalid XML
+# (see https://github.com/fsspec/s3fs/issues/484), which can result in a parser error
+# deep within botocore. So we treat those as retryable as well, even though there could
+# be some false positives.
+S3_RETRYABLE_ERRORS = (
+    socket.timeout,
+    HTTPClientError,
+    IncompleteRead,
+    FSTimeoutError,
+    ResponseParserError,
+)
 
 if ClientPayloadError is not None:
     S3_RETRYABLE_ERRORS += (ClientPayloadError,)
@@ -95,6 +106,13 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
             err = e
             logger.debug("Retryable error: %s", e)
             await asyncio.sleep(min(1.7**i * 0.1, 15))
+        except ClientError as e:
+            logger.debug("Client error (maybe retryable): %s", e)
+            err = e
+            if "SlowDown" in str(e):
+                await asyncio.sleep(min(1.7**i * 0.1, 15))
+            else:
+                break
         except Exception as e:
             logger.debug("Nonretryable error: %s", e)
             err = e
