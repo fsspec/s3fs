@@ -244,7 +244,7 @@ class S3FileSystem(AsyncFileSystem):
         cache_regions=False,
         asynchronous=False,
         loop=None,
-        **kwargs
+        **kwargs,
     ):
         if key and username:
             raise KeyError("Supply either key or username, not both")
@@ -522,7 +522,7 @@ class S3FileSystem(AsyncFileSystem):
         autocommit=True,
         requester_pays=None,
         cache_options=None,
-        **kwargs
+        **kwargs,
     ):
         """Open a file for reading or writing
 
@@ -1041,7 +1041,7 @@ class S3FileSystem(AsyncFileSystem):
                 "get_object",
                 Bucket=bucket,
                 Key=key,
-                Range=f'bytes={range}-',
+                Range=f"bytes={range}-",
                 **version_id_kw(version_id or vers),
                 **self.req_kw,
             )
@@ -1069,7 +1069,7 @@ class S3FileSystem(AsyncFileSystem):
                         except Exception:
                             pass
 
-                        await asyncio.sleep(min(1.7 ** failed_reads * 0.1, 15))
+                        await asyncio.sleep(min(1.7**failed_reads * 0.1, 15))
                         # Byte ranges are inclusive, which means we need to be careful to not read the same data twice
                         # in a failure.
                         # Examples:
