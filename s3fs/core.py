@@ -193,6 +193,7 @@ class S3FileSystem(AsyncFileSystem):
     read_timeout = 15
     default_block_size = 5 * 2**20
     protocol = ["s3", "s3a"]
+    concurrent_batched_deletes = 3_000
     _extra_tokenize_attributes = ("default_block_size",)
 
     def __init__(
@@ -1665,12 +1666,18 @@ class S3FileSystem(AsyncFileSystem):
         files = [p for p in paths if self.split_path(p)[1]]
         dirs = [p for p in paths if not self.split_path(p)[1]]
         # TODO: fails if more than one bucket in list
-        await asyncio.gather(
-            *[
-                self._bulk_delete(files[i : i + 1000])
-                for i in range(0, len(files), 1000)
-            ]
-        )
+        for i in range(0, len(files), self.concurrent_batched_deletes):
+            subset = files[i : i + self.concurrent_batched_deletes]
+            # don't bother sleeping for the last batch
+            slow_down = 1 if i + self.concurrent_batched_deletes < len(files) else 0
+            print(f"Deleting subset {i}, {i+self.concurrent_batched_deletes}")
+            await asyncio.gather(
+                *[
+                    self._bulk_delete(subset[j : j + 1000])
+                    for j in range(0, len(subset), 1000)
+                ],
+                asyncio.sleep(slow_down),
+            )
         await asyncio.gather(*[self._rmdir(d) for d in dirs])
         [
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
