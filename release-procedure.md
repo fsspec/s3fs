@@ -1,6 +1,9 @@
 1.  Verify tests on Linux, OS-X, and Windows
 
-2.  Update version in setup.py and s3fs/__init__.py and commit
+2.  Complete entries in `docs/source/changelog.rst`.
+
+    There's no need for changing version numbers in source files.
+    The release version will be determined from the git tag (see below).
 
 3.  Tag the commit
 
