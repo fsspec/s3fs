@@ -194,6 +194,7 @@ creating the ``s3fs`` filesystem. Here are some sample configurations:
 For a self-hosted MinIO instance:
 
 .. code-block:: python
+
    # When relying on auto discovery for credentials
    >>> s3 = s3fs.S3FileSystem(
          anon=False,
