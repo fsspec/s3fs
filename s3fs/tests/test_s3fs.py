@@ -85,11 +85,17 @@ def s3_base():
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foo"
     if "AWS_ACCESS_KEY_ID" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = "foo"
-    proc = subprocess.Popen(shlex.split("moto_server s3 -p %s" % port))
+    proc = subprocess.Popen(
+        shlex.split("moto_server s3 -p %s" % port),
+        stderr=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+    )
 
     timeout = 5
     while timeout > 0:
         try:
+            print("polling for moto server")
             r = requests.get(endpoint_uri)
             if r.ok:
                 break
@@ -97,7 +103,9 @@ def s3_base():
             pass
         timeout -= 0.1
         time.sleep(0.1)
+    print("server up")
     yield
+    print("moto done")
     proc.terminate()
     proc.wait()
 
