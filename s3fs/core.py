@@ -1681,9 +1681,15 @@ class S3FileSystem(AsyncFileSystem):
             # serial multipart copy
             await self._copy_managed(path1, path2, size, **kwargs)
 
+    async def _list_multipart_uploads(self, bucket):
+        out = await self._call_s3("list_multipart_uploads", Bucket=bucket)
+        return out.get("Contents", []) or out.get("Uploads", [])
+
+    list_multipart_uploads = sync_wrapper(_list_multipart_uploads)
+
     async def _clear_multipart_uploads(self, bucket):
         """Remove any partial uploads in the bucket"""
-        out = await self._call_s3("list_multipart_uploads", Bucket=bucket)
+        out = await self._list_multipart_uploads(bucket)
         await asyncio.gather(
             *[
                 self._call_s3(
@@ -1692,9 +1698,11 @@ class S3FileSystem(AsyncFileSystem):
                     Key=upload["Key"],
                     UploadId=upload["UploadId"],
                 )
-                for upload in out["Contents"]
+                for upload in out
             ]
         )
+
+    clear_multipart_uploads = sync_wrapper(_clear_multipart_uploads)
 
     async def _bulk_delete(self, pathlist, **kwargs):
         """

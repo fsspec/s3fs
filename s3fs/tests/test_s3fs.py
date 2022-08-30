@@ -2374,3 +2374,21 @@ def test_exists_isdir(s3):
     bad_path = "s3://nyc-tlc-asdfasdf/trip data/"
     assert not s3.exists(bad_path)
     assert not s3.isdir(bad_path)
+
+
+def test_list_del_multipart(s3):
+    path = test_bucket_name + "/afile"
+    f = s3.open(path, "wb")
+    f.write(b'0' * 6*2**20)
+
+    out = s3.list_multipart_uploads(test_bucket_name)
+    assert [_ for _ in out if _["Key"] == "afile"]
+
+    s3.clear_multipart_uploads(test_bucket_name)
+    out = s3.list_multipart_uploads(test_bucket_name)
+    assert not [_ for _ in out if _["Key"] == "afile"]
+
+    try:
+        f.close()  # may error
+    except Exception:
+        pass
