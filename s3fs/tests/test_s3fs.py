@@ -2379,7 +2379,7 @@ def test_exists_isdir(s3):
 def test_list_del_multipart(s3):
     path = test_bucket_name + "/afile"
     f = s3.open(path, "wb")
-    f.write(b'0' * 6*2**20)
+    f.write(b"0" * 6 * 2**20)
 
     out = s3.list_multipart_uploads(test_bucket_name)
     assert [_ for _ in out if _["Key"] == "afile"]
