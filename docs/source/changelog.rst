@@ -1,10 +1,13 @@
 Changelog
 =========
 
-2022.8.1
+2022.8.0
 --------
 
 - aiobotocore 2.4.0 (#643)
+- del/list multipart uploads (#645)
+- disallow prerelease aiohttp (#640)
+- docs syntax (#634)
 
 
 2022.7.1
