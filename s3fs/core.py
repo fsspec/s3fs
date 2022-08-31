@@ -7,6 +7,7 @@ import os
 import socket
 from typing import Tuple, Optional
 import weakref
+import re
 
 from urllib3.exceptions import IncompleteRead
 
@@ -363,6 +364,35 @@ class S3FileSystem(AsyncFileSystem):
                 out["version_aware"] = True
         return out
 
+    def _find_bucket_key(self, s3_path):
+        """
+        This is a helper function that given an s3 path such that the path is of
+        the form: bucket/key
+        It will return the bucket and the key represented by the s3 path
+        """
+
+        _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX = re.compile(
+            r'^(?P<bucket>arn:(aws).*:s3:[a-z\-0-9]*:[0-9]{12}:accesspoint[:/][^/]+)/?'
+            r'(?P<key>.*)$'
+        )
+        _S3_OUTPOST_TO_BUCKET_KEY_REGEX = re.compile(
+            r'^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]'
+            r'[a-zA-Z0-9\-]{1,63}[/:](bucket|accesspoint)[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$'
+        )
+        match = _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX.match(s3_path)
+        if match:
+            return match.group('bucket'), match.group('key')
+        match = _S3_OUTPOST_TO_BUCKET_KEY_REGEX.match(s3_path)
+        if match:
+            return match.group('bucket'), match.group('key')
+        s3_components = s3_path.split('/', 1)
+        bucket = s3_components[0]
+        s3_key = ''
+        if len(s3_components) > 1:
+            s3_key = s3_components[1]
+        return bucket, s3_key
+
+
     def split_path(self, path) -> Tuple[str, str, Optional[str]]:
         """
         Normalise S3 path string into bucket and key.
@@ -385,7 +415,7 @@ class S3FileSystem(AsyncFileSystem):
         if "/" not in path:
             return path, "", None
         else:
-            bucket, keypart = path.split("/", 1)
+            bucket, keypart = self._find_bucket_key(path)
             key, _, version_id = keypart.partition("?versionId=")
             return (
                 bucket,
@@ -2164,7 +2194,6 @@ class S3File(AbstractBufferedFile):
             )
             self.mpu = None
 
-
 def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
     if req_kw is None:
         req_kw = {}
@@ -2187,3 +2216,4 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
         **req_kw,
     )
     return sync(fs.loop, resp["Body"].read)
+
