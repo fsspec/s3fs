@@ -659,7 +659,13 @@ class S3FileSystem(AsyncFileSystem):
                 logger.debug("Get directory listing page for %s" % path)
                 await self.set_session()
                 s3 = await self.get_s3(bucket)
-                pag = s3.get_paginator("list_objects_v2")
+                if self.version_aware:
+                    method = "list_object_versions"
+                    contents_key = "Versions"
+                else:
+                    method = "list_objects_v2"
+                    contents_key = "Contents"
+                pag = s3.get_paginator(method)
                 config = {}
                 if max_items is not None:
                     config.update(MaxItems=max_items, PageSize=2 * max_items)
@@ -674,10 +680,11 @@ class S3FileSystem(AsyncFileSystem):
                 dircache = []
                 async for i in it:
                     dircache.extend(i.get("CommonPrefixes", []))
-                    for c in i.get("Contents", []):
-                        c["type"] = "file"
-                        c["size"] = c["Size"]
-                        files.append(c)
+                    for c in i.get(contents_key, []):
+                        if not self.version_aware or c.get("IsLatest"):
+                            c["type"] = "file"
+                            c["size"] = c["Size"]
+                            files.append(c)
                 if dircache:
                     files.extend(
                         [
@@ -1161,10 +1168,21 @@ class S3FileSystem(AsyncFileSystem):
         if not refresh:
             out = self._ls_from_cache(path)
             if out is not None:
-                out = [o for o in out if o["name"] == path]
-                if out:
-                    return out[0]
-                return {"name": path, "size": 0, "type": "directory"}
+                if self.version_aware and version_id is not None:
+                    # If cached info does not match requested version_id,
+                    # fallback to calling head_object
+                    out = [
+                        o
+                        for o in out
+                        if o["name"] == path and version_id == o.get("VersionId")
+                    ]
+                    if out:
+                        return out[0]
+                else:
+                    out = [o for o in out if o["name"] == path]
+                    if out:
+                        return out[0]
+                    return {"name": path, "size": 0, "type": "directory"}
         if key:
             try:
                 out = await self._call_s3(
