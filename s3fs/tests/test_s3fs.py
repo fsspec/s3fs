@@ -1639,8 +1639,14 @@ def test_versions_dircached(s3):
     assert cached.get("VersionId") == second_version
     assert s3.info(versioned_file) == cached
 
-    assert s3.info(versioned_file, version_id=first_version).get("VersionId") == first_version
-    assert s3.info(versioned_file, version_id=second_version).get("VersionId") == second_version
+    assert (
+        s3.info(versioned_file, version_id=first_version).get("VersionId")
+        == first_version
+    )
+    assert (
+        s3.info(versioned_file, version_id=second_version).get("VersionId")
+        == second_version
+    )
 
 
 def test_text_io__stream_wrapper_works(s3):
