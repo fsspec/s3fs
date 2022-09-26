@@ -372,26 +372,25 @@ class S3FileSystem(AsyncFileSystem):
         """
 
         _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX = re.compile(
-            r'^(?P<bucket>arn:(aws).*:s3:[a-z\-0-9]*:[0-9]{12}:accesspoint[:/][^/]+)/?'
-            r'(?P<key>.*)$'
+            r"^(?P<bucket>arn:(aws).*:s3:[a-z\-0-9]*:[0-9]{12}:accesspoint[:/][^/]+)/?"
+            r"(?P<key>.*)$"
         )
         _S3_OUTPOST_TO_BUCKET_KEY_REGEX = re.compile(
-            r'^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]'
-            r'[a-zA-Z0-9\-]{1,63}[/:](bucket|accesspoint)[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$'
+            r"^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]"
+            r"[a-zA-Z0-9\-]{1,63}[/:](bucket|accesspoint)[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$"
         )
         match = _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX.match(s3_path)
         if match:
-            return match.group('bucket'), match.group('key')
+            return match.group("bucket"), match.group("key")
         match = _S3_OUTPOST_TO_BUCKET_KEY_REGEX.match(s3_path)
         if match:
-            return match.group('bucket'), match.group('key')
-        s3_components = s3_path.split('/', 1)
+            return match.group("bucket"), match.group("key")
+        s3_components = s3_path.split("/", 1)
         bucket = s3_components[0]
-        s3_key = ''
+        s3_key = ""
         if len(s3_components) > 1:
             s3_key = s3_components[1]
         return bucket, s3_key
-
 
     def split_path(self, path) -> Tuple[str, str, Optional[str]]:
         """
@@ -2194,6 +2193,7 @@ class S3File(AbstractBufferedFile):
             )
             self.mpu = None
 
+
 def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
     if req_kw is None:
         req_kw = {}
@@ -2216,4 +2216,3 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
         **req_kw,
     )
     return sync(fs.loop, resp["Body"].read)
-
