@@ -1158,12 +1158,13 @@ class S3FileSystem(AsyncFileSystem):
         if path in ["/", ""]:
             return {"name": path, "size": 0, "type": "directory"}
         version_id = _coalesce_version_id(path_version_id, version_id)
-        if not refresh and self._ls_from_cache(path) is not None:
+        if not refresh:
             out = self._ls_from_cache(path)
-            out = [o for o in out if o["name"] == path]
-            if out:
-                return out[0]
-            return {"name": path, "size": 0, "type": "directory"}
+            if out is not None:
+                out = [o for o in out if o["name"] == path]
+                if out:
+                    return out[0]
+                return {"name": path, "size": 0, "type": "directory"}
         if key:
             try:
                 out = await self._call_s3(
