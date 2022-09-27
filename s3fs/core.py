@@ -211,7 +211,12 @@ class S3FileSystem(AsyncFileSystem):
     version_aware : bool (False)
         Whether to support bucket versioning.  If enable this will require the
         user to have the necessary IAM permissions for dealing with versioned
-        objects.
+        objects. Note that in the event that you only need to work with the
+        latest version of objects in a versioned bucket, and do not need the
+        VersionId for those objects, you should set ``version_aware`` to False
+        for performance reasons. When set to True, filesystem instances will
+        use the S3 ListObjectVersions API call to list directory contents,
+        which requires listing all historical object versions.
     cache_regions : bool (False)
         Whether to cache bucket regions or not. Whenever a new bucket is used,
         it will first find out which region it belongs and then use the client
