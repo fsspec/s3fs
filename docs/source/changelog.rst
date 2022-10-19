@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2022.10.0
+---------
+
+- directory cache race condition (#655)
+- version aware find (#654)
+
 2022.8.1
 --------
 
