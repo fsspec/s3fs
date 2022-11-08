@@ -652,14 +652,25 @@ class S3FileSystem(AsyncFileSystem):
         )
 
     async def _lsdir(
-        self, path, refresh=False, max_items=None, delimiter="/", prefix=""
+        self,
+        path,
+        refresh=False,
+        max_items=None,
+        delimiter="/",
+        prefix="",
+        versions=False,
     ):
+        if versions and not self.version_aware:
+            raise ValueError(
+                "versions cannot be specified if the filesystem is not version aware"
+            )
+
         bucket, key, _ = self.split_path(path)
         if not prefix:
             prefix = ""
         if key:
             prefix = key.lstrip("/") + "/" + prefix
-        if path not in self.dircache or refresh or not delimiter:
+        if path not in self.dircache or refresh or not delimiter or versions:
             try:
                 logger.debug("Get directory listing page for %s" % path)
                 await self.set_session()
@@ -686,7 +697,7 @@ class S3FileSystem(AsyncFileSystem):
                 async for i in it:
                     dircache.extend(i.get("CommonPrefixes", []))
                     for c in i.get(contents_key, []):
-                        if not self.version_aware or c.get("IsLatest"):
+                        if not self.version_aware or c.get("IsLatest") or versions:
                             c["type"] = "file"
                             c["size"] = c["Size"]
                             files.append(c)
@@ -706,10 +717,13 @@ class S3FileSystem(AsyncFileSystem):
                 for f in files:
                     f["Key"] = "/".join([bucket, f["Key"]])
                     f["name"] = f["Key"]
+                    version_id = f.get("VersionId")
+                    if versions and version_id and version_id != "null":
+                        f["name"] += f"?versionId={version_id}"
             except ClientError as e:
                 raise translate_boto_error(e)
 
-            if delimiter and files:
+            if delimiter and files and not versions:
                 self.dircache[path] = files
             return files
         return self.dircache[path]
@@ -882,7 +896,7 @@ class S3FileSystem(AsyncFileSystem):
             return files
         return self.dircache[""]
 
-    async def _ls(self, path, detail=False, refresh=False):
+    async def _ls(self, path, detail=False, refresh=False, versions=False):
         """List files in given bucket, or list of buckets.
 
         Listing is cached unless `refresh=True`.
@@ -901,9 +915,11 @@ class S3FileSystem(AsyncFileSystem):
         if path in ["", "/"]:
             files = await self._lsbuckets(refresh)
         else:
-            files = await self._lsdir(path, refresh)
+            files = await self._lsdir(path, refresh, versions=versions)
             if not files and "/" in path:
-                files = await self._lsdir(self._parent(path), refresh=refresh)
+                files = await self._lsdir(
+                    self._parent(path), refresh=refresh, versions=versions
+                )
                 files = [
                     o
                     for o in files

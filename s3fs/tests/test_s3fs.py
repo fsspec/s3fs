@@ -1602,6 +1602,12 @@ def test_versioned_file_fullpath(s3):
         assert fo.version_id == version_id
         assert fo.read() == b"1"
 
+    versions = s3.object_version_info(versioned_file)
+    version_ids = [version["VersionId"] for version in versions]
+    assert set(s3.ls(versioned_bucket_name, versions=True)) == {
+        f"{versioned_file}?versionId={vid}" for vid in version_ids
+    }
+
 
 def test_versions_unaware(s3):
     versioned_file = versioned_bucket_name + "/versioned_file3"
