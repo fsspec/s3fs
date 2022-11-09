@@ -11,6 +11,7 @@ import re
 
 from urllib3.exceptions import IncompleteRead
 
+import fsspec  # noqa: F401
 from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_storage_options, tokenize, setup_logging as setup_logger
 from fsspec.asyn import (
