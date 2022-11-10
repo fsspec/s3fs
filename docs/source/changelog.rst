@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2022.11.0
+---------
+
+- optionally listing versions with ls (#661)
+
 2022.10.0
 ---------
 

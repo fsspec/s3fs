@@ -2248,7 +2248,11 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
         )
         return b""
     logger.debug("Fetch: %s/%s, %s-%s", bucket, key, start, end)
-    resp = fs.call_s3(
+    return sync(fs.loop, _inner_fetch, fs, bucket, key, version_id, start, end, req_kw)
+
+
+async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
+    resp = await fs._call_s3(
         "get_object",
         Bucket=bucket,
         Key=key,
@@ -2256,4 +2260,4 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
         **version_id_kw(version_id),
         **req_kw,
     )
-    return sync(fs.loop, resp["Body"].read)
+    return await resp["Body"].read()
