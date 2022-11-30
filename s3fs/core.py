@@ -674,53 +674,13 @@ class S3FileSystem(AsyncFileSystem):
         if path not in self.dircache or refresh or not delimiter or versions:
             try:
                 logger.debug("Get directory listing page for %s" % path)
-                await self.set_session()
-                s3 = await self.get_s3(bucket)
-                if self.version_aware:
-                    method = "list_object_versions"
-                    contents_key = "Versions"
-                else:
-                    method = "list_objects_v2"
-                    contents_key = "Contents"
-                pag = s3.get_paginator(method)
-                config = {}
-                if max_items is not None:
-                    config.update(MaxItems=max_items, PageSize=2 * max_items)
-                it = pag.paginate(
-                    Bucket=bucket,
-                    Prefix=prefix,
-                    Delimiter=delimiter,
-                    PaginationConfig=config,
-                    **self.req_kw,
+                files = await self._do_lsdir(
+                    bucket,
+                    max_items=max_items,
+                    delimiter=delimiter,
+                    prefix=prefix,
+                    versions=versions,
                 )
-                files = []
-                dircache = []
-                async for i in it:
-                    dircache.extend(i.get("CommonPrefixes", []))
-                    for c in i.get(contents_key, []):
-                        if not self.version_aware or c.get("IsLatest") or versions:
-                            c["type"] = "file"
-                            c["size"] = c["Size"]
-                            files.append(c)
-                if dircache:
-                    files.extend(
-                        [
-                            {
-                                "Key": l["Prefix"][:-1],
-                                "Size": 0,
-                                "StorageClass": "DIRECTORY",
-                                "type": "directory",
-                                "size": 0,
-                            }
-                            for l in dircache
-                        ]
-                    )
-                for f in files:
-                    f["Key"] = "/".join([bucket, f["Key"]])
-                    f["name"] = f["Key"]
-                    version_id = f.get("VersionId")
-                    if versions and version_id and version_id != "null":
-                        f["name"] += f"?versionId={version_id}"
             except ClientError as e:
                 raise translate_boto_error(e)
 
@@ -728,6 +688,58 @@ class S3FileSystem(AsyncFileSystem):
                 self.dircache[path] = files
             return files
         return self.dircache[path]
+
+    async def _do_lsdir(
+        self, bucket, max_items=None, delimiter="/", prefix="", versions=False
+    ):
+        await self.set_session()
+        s3 = await self.get_s3(bucket)
+        if self.version_aware:
+            method = "list_object_versions"
+            contents_key = "Versions"
+        else:
+            method = "list_objects_v2"
+            contents_key = "Contents"
+        pag = s3.get_paginator(method)
+        config = {}
+        if max_items is not None:
+            config.update(MaxItems=max_items, PageSize=2 * max_items)
+        it = pag.paginate(
+            Bucket=bucket,
+            Prefix=prefix,
+            Delimiter=delimiter,
+            PaginationConfig=config,
+            **self.req_kw,
+        )
+        files = []
+        dircache = []
+        async for i in it:
+            dircache.extend(i.get("CommonPrefixes", []))
+            for c in i.get(contents_key, []):
+                if not self.version_aware or c.get("IsLatest") or versions:
+                    c["type"] = "file"
+                    c["size"] = c["Size"]
+                    files.append(c)
+        if dircache:
+            files.extend(
+                [
+                    {
+                        "Key": l["Prefix"][:-1],
+                        "Size": 0,
+                        "StorageClass": "DIRECTORY",
+                        "type": "directory",
+                        "size": 0,
+                    }
+                    for l in dircache
+                ]
+            )
+        for f in files:
+            f["Key"] = "/".join([bucket, f["Key"]])
+            f["name"] = f["Key"]
+            version_id = f.get("VersionId")
+            if versions and version_id and version_id != "null":
+                f["name"] += f"?versionId={version_id}"
+        return files
 
     async def _glob(self, path, **kwargs):
         if path.startswith("*"):
