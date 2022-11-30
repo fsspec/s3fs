@@ -712,34 +712,34 @@ class S3FileSystem(AsyncFileSystem):
             **self.req_kw,
         )
         files = []
-        dircache = []
+        dirs = []
         async for i in it:
-            dircache.extend(i.get("CommonPrefixes", []))
+            for l in i.get("CommonPrefixes", []):
+                c = {
+                    "Key": l["Prefix"][:-1],
+                    "Size": 0,
+                    "StorageClass": "DIRECTORY",
+                    "type": "directory",
+                }
+                self._fill_info(c, bucket, versions=False)
+                dirs.append(c)
             for c in i.get(contents_key, []):
                 if not self.version_aware or c.get("IsLatest") or versions:
                     c["type"] = "file"
                     c["size"] = c["Size"]
+                    self._fill_info(c, bucket, versions=versions)
                     files.append(c)
-        if dircache:
-            files.extend(
-                [
-                    {
-                        "Key": l["Prefix"][:-1],
-                        "Size": 0,
-                        "StorageClass": "DIRECTORY",
-                        "type": "directory",
-                        "size": 0,
-                    }
-                    for l in dircache
-                ]
-            )
-        for f in files:
-            f["Key"] = "/".join([bucket, f["Key"]])
-            f["name"] = f["Key"]
-            version_id = f.get("VersionId")
-            if versions and version_id and version_id != "null":
-                f["name"] += f"?versionId={version_id}"
+        files += dirs
         return files
+
+    @staticmethod
+    def _fill_info(f, bucket, versions=False):
+        f["size"] = f["Size"]
+        f["Key"] = "/".join([bucket, f["Key"]])
+        f["name"] = f["Key"]
+        version_id = f.get("VersionId")
+        if versions and version_id and version_id != "null":
+            f["name"] += f"?versionId={version_id}"
 
     async def _glob(self, path, **kwargs):
         if path.startswith("*"):
