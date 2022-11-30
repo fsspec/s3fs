@@ -2112,6 +2112,26 @@ def test_put_single(s3, tmpdir):
     assert s3.cat(test_bucket_name + "/dir/abc") == b"text"
 
 
+def test_put_single_repeat(s3, tmpdir):
+    # See https://github.com/fsspec/s3fs/issues/659
+    # Potential different behaviour if s3.put called multiple times with
+    # a directory containing a single file
+    directory = os.path.join(str(tmpdir), "issue659_dir")
+    os.mkdir(directory)
+    test_file = os.path.join(directory, "issue659_file")
+    with open(test_file, "w") as f:
+        f.write("some text")
+
+    assert not s3.exists(test_bucket_name + "/issue659_dir")
+
+    for _ in range(2):
+        s3.put(directory, test_bucket_name, recursive=True)
+        assert s3.isdir(test_bucket_name + "/issue659_dir")
+        assert s3.isfile(test_bucket_name + "/issue659_dir/issue659_file")
+        assert not s3.exists(test_bucket_name + "/issue659_file")
+        assert s3.cat(test_bucket_name + "/issue659_dir/issue659_file") == b"some text"
+
+
 def test_shallow_find(s3):
     """Test that find method respects maxdepth.
 
