@@ -117,11 +117,11 @@ works, but you might find the implementation interesting.
 Multiprocessing
 ---------------
 
-When using Python's `multiprocessing`, the start method must be set to either
+When using Python's `multiprocessing`_, the start method must be set to either
 ``spawn`` or ``forkserver``. ``fork`` is not safe to use because of the open sockets
 and async thread used by s3fs, and may lead to
 hard-to-find bugs and occasional deadlocks. Read more about the available
-`start methods`.
+`start methods`_.
 
 .. _multiprocessing: https://docs.python.org/3/library/multiprocessing.html
 .. _start methods: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
