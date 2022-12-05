@@ -674,13 +674,20 @@ class S3FileSystem(AsyncFileSystem):
         if path not in self.dircache or refresh or not delimiter or versions:
             try:
                 logger.debug("Get directory listing page for %s" % path)
-                files = await self._do_lsdir(
+                dirs = []
+                files = []
+                async for c in self._iterdir(
                     bucket,
                     max_items=max_items,
                     delimiter=delimiter,
                     prefix=prefix,
                     versions=versions,
-                )
+                ):
+                    if c["type"] == "directory":
+                        dirs.append(c)
+                    else:
+                        files.append(c)
+                files += dirs
             except ClientError as e:
                 raise translate_boto_error(e)
 
@@ -689,7 +696,7 @@ class S3FileSystem(AsyncFileSystem):
             return files
         return self.dircache[path]
 
-    async def _do_lsdir(
+    async def _iterdir(
         self, bucket, max_items=None, delimiter="/", prefix="", versions=False
     ):
         await self.set_session()
@@ -711,8 +718,6 @@ class S3FileSystem(AsyncFileSystem):
             PaginationConfig=config,
             **self.req_kw,
         )
-        files = []
-        dirs = []
         async for i in it:
             for l in i.get("CommonPrefixes", []):
                 c = {
@@ -722,15 +727,13 @@ class S3FileSystem(AsyncFileSystem):
                     "type": "directory",
                 }
                 self._fill_info(c, bucket, versions=False)
-                dirs.append(c)
+                yield c
             for c in i.get(contents_key, []):
                 if not self.version_aware or c.get("IsLatest") or versions:
                     c["type"] = "file"
                     c["size"] = c["Size"]
                     self._fill_info(c, bucket, versions=versions)
-                    files.append(c)
-        files += dirs
-        return files
+                    yield c
 
     @staticmethod
     def _fill_info(f, bucket, versions=False):
