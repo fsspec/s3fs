@@ -737,6 +737,7 @@ class S3FileSystem(AsyncFileSystem):
     async def _find(self, path, maxdepth=None, withdirs=None, detail=False, prefix=""):
         """List all files below path.
         Like posix ``find`` command without conditions
+
         Parameters
         ----------
         path : str
