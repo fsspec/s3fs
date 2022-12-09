@@ -661,11 +661,6 @@ class S3FileSystem(AsyncFileSystem):
         prefix="",
         versions=False,
     ):
-        if versions and not self.version_aware:
-            raise ValueError(
-                "versions cannot be specified if the filesystem is not version aware"
-            )
-
         bucket, key, _ = self.split_path(path)
         if not prefix:
             prefix = ""
@@ -703,6 +698,10 @@ class S3FileSystem(AsyncFileSystem):
 
         The contents are yielded in arbitrary order as info dicts.
         """
+        if versions and not self.version_aware:
+            raise ValueError(
+                "versions cannot be specified if the filesystem is not version aware"
+            )
         await self.set_session()
         s3 = await self.get_s3(bucket)
         if self.version_aware:
