@@ -699,6 +699,10 @@ class S3FileSystem(AsyncFileSystem):
     async def _iterdir(
         self, bucket, max_items=None, delimiter="/", prefix="", versions=False
     ):
+        """Iterate asynchronously over files and directories under `prefix`.
+
+        The contents are yielded in arbitrary order as info dicts.
+        """
         await self.set_session()
         s3 = await self.get_s3(bucket)
         if self.version_aware:
