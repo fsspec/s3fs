@@ -205,10 +205,10 @@ class S3FileSystem(AsyncFileSystem):
     default_fill_cache : Bool (True)
         Whether to use cache filling with open by default. Refer to
         ``S3File.open``.
-    default_cache_type : string ('bytes')
+    default_cache_type : string ("readahead")
         If given, the default cache_type value used for ``open()``. Set to "none"
         if no caching is desired. See fsspec's documentation for other available
-        cache_type values. Default cache_type is 'bytes'.
+        cache_type values. Default cache_type is "readahead".
     version_aware : bool (False)
         Whether to support bucket versioning.  If enable this will require the
         user to have the necessary IAM permissions for dealing with versioned
@@ -265,7 +265,7 @@ class S3FileSystem(AsyncFileSystem):
         requester_pays=False,
         default_block_size=None,
         default_fill_cache=True,
-        default_cache_type="bytes",
+        default_cache_type="readahead",
         version_aware=False,
         config_kwargs=None,
         s3_additional_kwargs=None,
@@ -1972,7 +1972,7 @@ class S3File(AbstractBufferedFile):
         fill_cache=True,
         s3_additional_kwargs=None,
         autocommit=True,
-        cache_type="bytes",
+        cache_type="readahead",
         requester_pays=False,
         cache_options=None,
     ):

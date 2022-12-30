@@ -183,7 +183,7 @@ def test_simple(s3):
         assert out == data
 
 
-@pytest.mark.parametrize("default_cache_type", ["none", "bytes", "mmap"])
+@pytest.mark.parametrize("default_cache_type", ["none", "bytes", "mmap", "readahead"])
 def test_default_cache_type(s3, default_cache_type):
     data = b"a" * (10 * 2**20)
     s3 = S3FileSystem(
@@ -1024,7 +1024,7 @@ def test_errors_cause_preservings(monkeypatch, s3):
 
 def test_read_small(s3):
     fn = test_bucket_name + "/2014-01-01.csv"
-    with s3.open(fn, "rb", block_size=10) as f:
+    with s3.open(fn, "rb", block_size=10, cache_type="bytes") as f:
         out = []
         while True:
             data = f.read(3)
