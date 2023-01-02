@@ -1527,7 +1527,7 @@ class S3FileSystem(AsyncFileSystem):
 
     setxattr = sync_wrapper(_setxattr)
 
-    async def _chmod(self, path, acl, **kwargs):
+    async def _chmod(self, path, acl, recursive=False, **kwargs):
         """Set Access Control on a bucket/key
 
         See http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl
@@ -1538,9 +1538,14 @@ class S3FileSystem(AsyncFileSystem):
             the object to set
         acl : string
             the value of ACL to apply
+        recursive : bool
+            whether to apply the ACL to all keys below the given path too
         """
         bucket, key, version_id = self.split_path(path)
-        if key:
+        if recursive:
+            allfiles = await self._find(path, withdirs=False)
+            await asyncio.gather(*[self._chmod(p, recursive=False) for p in allfiles])
+        elif key:
             if acl not in key_acls:
                 raise ValueError("ACL not in %s", key_acls)
             await self._call_s3(
@@ -1551,7 +1556,7 @@ class S3FileSystem(AsyncFileSystem):
                 ACL=acl,
                 **version_id_kw(version_id),
             )
-        else:
+        if not key:
             if acl not in buck_acls:
                 raise ValueError("ACL not in %s", buck_acls)
             await self._call_s3("put_bucket_acl", kwargs, Bucket=bucket, ACL=acl)
