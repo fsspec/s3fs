@@ -376,21 +376,30 @@ class S3FileSystem(AsyncFileSystem):
         the form: bucket/key
         It will return the bucket and the key represented by the s3 path
         """
-
-        _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX = re.compile(
-            r"^(?P<bucket>arn:(aws).*:s3:[a-z\-0-9]*:[0-9]{12}:accesspoint[:/][^/]+)/?"
-            r"(?P<key>.*)$"
-        )
-        _S3_OUTPOST_TO_BUCKET_KEY_REGEX = re.compile(
-            r"^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]"
-            r"[a-zA-Z0-9\-]{1,63}[/:](bucket|accesspoint)[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$"
-        )
-        match = _S3_ACCESSPOINT_TO_BUCKET_KEY_REGEX.match(s3_path)
-        if match:
-            return match.group("bucket"), match.group("key")
-        match = _S3_OUTPOST_TO_BUCKET_KEY_REGEX.match(s3_path)
-        if match:
-            return match.group("bucket"), match.group("key")
+        
+        bucket_format_list = [
+            re.compile(
+                r"^(?P<bucket>arn:(aws).*:s3:[a-z\-0-9]*:[0-9]{12}:accesspoint[:/][^/]+)/?"
+                r"(?P<key>.*)$"
+            ),
+            re.compile(
+                r"^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]"
+                r"[a-zA-Z0-9\-]{1,63}[/:](bucket|accesspoint)[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$"
+            ),
+            re.compile(
+                r'^(?P<bucket>arn:(aws).*:s3-outposts:[a-z\-0-9]+:[0-9]{12}:outpost[/:]'
+                r'[a-zA-Z0-9\-]{1,63}[/:]bucket[/:]'
+                r'[a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$'
+            ),
+            re.compile(
+                r'^(?P<bucket>arn:(aws).*:s3-object-lambda:[a-z\-0-9]+:[0-9]{12}:'
+                r'accesspoint[/:][a-zA-Z0-9\-]{1,63})[/:]?(?P<key>.*)$'
+            )
+        ]
+        for bucket_format in bucket_format_list:
+            match = bucket_format.match(s3_path)
+            if match:
+                return match.group("bucket"), match.group("key")
         s3_components = s3_path.split("/", 1)
         bucket = s3_components[0]
         s3_key = ""

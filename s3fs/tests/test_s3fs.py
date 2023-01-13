@@ -2433,6 +2433,7 @@ def test_split_path(s3):
         "arn:aws:s3:region:123456789012:accesspoint/my-access-point-name",
         "arn:aws:s3-outposts:region:123456789012:outpost/outpost-id/bucket/my-test-bucket",
         "arn:aws:s3-outposts:region:123456789012:outpost/outpost-id/accesspoint/my-accesspoint-name",
+        "arn:aws:s3-object-lambda:region:123456789012:accesspoint/my-lambda-object-name",
     ]
     test_key = "my/test/path"
     for test_bucket in buckets:
