@@ -210,6 +210,26 @@ For a self-hosted MinIO instance:
             'endpoint_url': 'https://...'
          }
       )
+      
+For Storj DCS via the S3-compatible gateway:
+
+.. code-block:: python
+
+   # When relying on auto discovery for credentials
+   >>> s3 = s3fs.S3FileSystem(
+         anon=False,
+         client_kwargs={
+            'endpoint_url': 'https://gateway.storjshare.io'
+         }
+      )
+   # Or passing the credentials directly
+   >>> s3 = s3fs.S3FileSystem(
+         key='miniokey...',
+         secret='asecretkey...',
+         client_kwargs={
+            'endpoint_url': 'https://gateway.storjshare.io'
+         }
+      )
 
 For a Scaleway s3-compatible storage in the ``fr-par`` zone:
 
