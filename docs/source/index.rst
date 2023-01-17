@@ -211,7 +211,7 @@ For a self-hosted MinIO instance:
          }
       )
       
-For Storj DCS via the S3-compatible gateway:
+For Storj DCS via the `S3-compatible Gateway <https://docs.storj.io/dcs/getting-started/quickstart-aws-sdk-and-hosted-gateway-mt>`_:
 
 .. code-block:: python
 
@@ -224,7 +224,7 @@ For Storj DCS via the S3-compatible gateway:
       )
    # Or passing the credentials directly
    >>> s3 = s3fs.S3FileSystem(
-         key='miniokey...',
+         key='accesskey...',
          secret='asecretkey...',
          client_kwargs={
             'endpoint_url': 'https://gateway.storjshare.io'
