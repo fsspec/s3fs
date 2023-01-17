@@ -210,7 +210,7 @@ For a self-hosted MinIO instance:
             'endpoint_url': 'https://...'
          }
       )
-      
+
 For Storj DCS via the `S3-compatible Gateway <https://docs.storj.io/dcs/getting-started/quickstart-aws-sdk-and-hosted-gateway-mt>`_:
 
 .. code-block:: python
