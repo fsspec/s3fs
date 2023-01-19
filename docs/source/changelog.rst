@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2023.1.0
+--------
+
+- parse lambda ARNs (#686)
+- recursive on chmod (#679)
+- default cache to be readahead (#678)
+- temporary redirects in headBucket (#676)
+- async iterator for listings (#670)
+
+
 2022.11.0
 ---------
 
