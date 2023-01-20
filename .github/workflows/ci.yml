@@ -30,7 +30,9 @@ jobs:
 
       - name: Install
         shell: bash -l {0}
-        run: pip install .
+        run: |
+          pip install git+https://github.com/fsspec/filesystem-spec
+          pip install . --no-deps
 
       - name: Run Tests
         shell: bash -l {0}
