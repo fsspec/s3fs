@@ -25,7 +25,7 @@ jobs:
       - name: Setup conda
         uses: mamba-org/provision-with-micromamba@main
         with:
-          environment-file: ci/env.yml
+          environment-file: ci/env.yaml
           extra-specs: python=${{ matrix.python-version }}
 
       - name: Install
