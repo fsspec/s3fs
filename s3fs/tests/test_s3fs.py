@@ -1860,10 +1860,22 @@ def test_get_directories(s3, tmpdir):
     s3.touch(test_bucket_name + "/dir/dirkey")
     s3.touch(test_bucket_name + "/dir/dir/key")
     d = str(tmpdir)
-    s3.get(test_bucket_name + "/dir", d, recursive=True)
+
+    # Target directory with trailing slash
+    s3.get(test_bucket_name + "/dir/", d, recursive=True)
     assert {"dirkey", "dir"} == set(os.listdir(d))
     assert ["key"] == os.listdir(os.path.join(d, "dir"))
     assert {"key0", "key1"} == set(os.listdir(os.path.join(d, "dirkey")))
+
+    local_fs = fsspec.filesystem("file")
+    local_fs.rm(os.path.join(d, "dir"), recursive=True)
+    local_fs.rm(os.path.join(d, "dirkey"), recursive=True)
+
+    # Target directory without trailing slash
+    s3.get(test_bucket_name + "/dir", d, recursive=True)
+    assert ["dir"] == os.listdir(d)
+    assert {"dirkey", "dir"} == set(os.listdir(os.path.join(d, "dir")))
+    assert {"key0", "key1"} == set(os.listdir(os.path.join(d, "dir", "dirkey")))
 
 
 def test_seek_reads(s3):
@@ -2105,10 +2117,17 @@ def test_put_single(s3, tmpdir):
     fn = os.path.join(str(tmpdir), "dir")
     os.mkdir(fn)
     open(os.path.join(fn, "abc"), "w").write("text")
+
+    # Put with trailing slash
     s3.put(fn + "/", test_bucket_name)  # no-op, no files
     assert not s3.exists(test_bucket_name + "/abc")
     assert not s3.exists(test_bucket_name + "/dir")
-    s3.put(fn + "/", test_bucket_name, recursive=True)  # no-op, no files
+
+    s3.put(fn + "/", test_bucket_name, recursive=True)
+    assert s3.cat(test_bucket_name + "/abc") == b"text"
+
+    # Put without trailing slash
+    s3.put(fn, test_bucket_name, recursive=True)
     assert s3.cat(test_bucket_name + "/dir/abc") == b"text"
 
 
@@ -2440,3 +2459,118 @@ def test_split_path(s3):
         bucket, key, _ = s3.split_path("s3://" + test_bucket + "/" + test_key)
         assert bucket == test_bucket
         assert key == test_key
+
+
+def test_cp_directory_recursive(s3):
+    src = test_bucket_name + "/src"
+    src_file = src + "/file"
+    s3.mkdir(src)
+    s3.touch(src_file)
+
+    target = test_bucket_name + "/target"
+
+    # cp without slash
+    assert not s3.exists(target)
+    for loop in range(2):
+        s3.cp(src, target, recursive=True)
+        assert s3.isdir(target)
+
+        if loop == 0:
+            correct = [target + "/file"]
+            assert s3.find(target) == correct
+        else:
+            correct = [target + "/file", target + "/src/file"]
+            assert sorted(s3.find(target)) == correct
+
+    s3.rm(target, recursive=True)
+
+    # cp with slash
+    assert not s3.exists(target)
+    for loop in range(2):
+        s3.cp(src + "/", target, recursive=True)
+        assert s3.isdir(target)
+        correct = [target + "/file"]
+        assert s3.find(target) == correct
+
+
+def test_get_directory_recursive(s3, tmpdir):
+    src = test_bucket_name + "/src"
+    src_file = src + "/file"
+    s3.mkdir(src)
+    s3.touch(src_file)
+
+    target = os.path.join(tmpdir, "target")
+    target_fs = fsspec.filesystem("file")
+
+    # get without slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        s3.get(src, target, recursive=True)
+        assert target_fs.isdir(target)
+
+        if loop == 0:
+            assert target_fs.find(target) == [os.path.join(target, "file")]
+        else:
+            assert sorted(target_fs.find(target)) == [
+                os.path.join(target, "file"),
+                os.path.join(target, "src", "file"),
+            ]
+
+    target_fs.rm(target, recursive=True)
+
+    # get with slash
+    assert not target_fs.exists(target)
+    for loop in range(2):
+        s3.get(src + "/", target, recursive=True)
+        assert target_fs.isdir(target)
+        assert target_fs.find(target) == [os.path.join(target, "file")]
+
+
+def test_put_directory_recursive(s3, tmpdir):
+    src = os.path.join(tmpdir, "src")
+    src_file = os.path.join(src, "file")
+    source_fs = fsspec.filesystem("file")
+    source_fs.mkdir(src)
+    source_fs.touch(src_file)
+
+    target = test_bucket_name + "/target"
+
+    # put without slash
+    assert not s3.exists(target)
+    for loop in range(2):
+        s3.put(src, target, recursive=True)
+        assert s3.isdir(target)
+
+        if loop == 0:
+            assert s3.find(target) == [target + "/file"]
+        else:
+            assert sorted(s3.find(target)) == [target + "/file", target + "/src/file"]
+
+    s3.rm(target, recursive=True)
+
+    # put with slash
+    assert not s3.exists(target)
+    for loop in range(2):
+        s3.put(src + "/", target, recursive=True)
+        assert s3.isdir(target)
+        assert s3.find(target) == [target + "/file"]
+
+
+def test_cp_two_files(s3):
+    src = test_bucket_name + "/src"
+    file0 = src + "/file0"
+    file1 = src + "/file1"
+    s3.mkdir(src)
+    s3.touch(file0)
+    s3.touch(file1)
+
+    target = test_bucket_name + "/target"
+    assert not s3.exists(target)
+
+    s3.cp([file0, file1], target)
+
+    assert s3.isdir(target)
+    assert sorted(s3.find(target)) == [
+        target + "/file0",
+        target + "/file1",
+    ]
