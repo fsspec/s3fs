@@ -333,6 +333,7 @@ Contents
 
 .. toctree::
    install
+   development
    api
    changelog
    :maxdepth: 2

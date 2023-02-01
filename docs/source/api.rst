@@ -41,9 +41,11 @@ API
 
 .. autoclass:: S3FileSystem
    :members:
+   :inherited-members:
 
 .. autoclass:: S3File
    :members:
+   :inherited-members:
 
 .. currentmodule:: s3fs.mapping
 
