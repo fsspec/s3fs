@@ -4,6 +4,6 @@ channels:
 dependencies:
   - python= 3.9
   - botocore
-  - docutils<0.18
+  - docutils<0.17
   - numpydoc
   - sphinx_rtd_theme
