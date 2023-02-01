@@ -1,5 +1,0 @@
-numpydoc
-botocore
-sphinx
-sphinx-rtd-theme
-docutils<0.18
