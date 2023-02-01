@@ -1501,9 +1501,7 @@ class S3FileSystem(AsyncFileSystem):
         >>> mys3file.setxattr(copy_kwargs={'ContentType': 'application/pdf'},
         ...     attribute_1='value1')  # doctest: +SKIP
 
-
-        .. Metadata Reference:
-        http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-metadata
+        .. _Metadata Reference: http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-metadata
         """
 
         kw_args = {k.replace("_", "-"): v for k, v in kw_args.items()}
