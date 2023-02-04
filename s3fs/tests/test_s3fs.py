@@ -2574,3 +2574,7 @@ def test_cp_two_files(s3):
         target + "/file0",
         target + "/file1",
     ]
+
+
+def test_fsid(s3):
+    assert s3.fsid == "s3"
