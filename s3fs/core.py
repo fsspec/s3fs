@@ -1929,6 +1929,7 @@ class S3FileSystem(AsyncFileSystem):
 
     invalidate_region_cache = sync_wrapper(_invalidate_region_cache)
 
+    @property
     def fsid(self):
         """Persistent filesystem id that can be used to compare filesystems
         across sessions.
