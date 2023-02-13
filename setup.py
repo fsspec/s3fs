@@ -32,7 +32,7 @@ setup(
     license="BSD",
     keywords="s3, boto",
     packages=["s3fs"],
-    python_requires=">= 3.7",
+    python_requires=">= 3.8",
     install_requires=[open("requirements.txt").read().strip().split("\n")],
     extras_require={
         "awscli": [f"aiobotocore[awscli]{aiobotocore_version_suffix}"],
