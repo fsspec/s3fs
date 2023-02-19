@@ -257,6 +257,7 @@ class S3FileSystem(AsyncFileSystem):
     def __init__(
         self,
         anon=False,
+        endpoint_url=None,
         key=None,
         secret=None,
         token=None,
@@ -285,6 +286,8 @@ class S3FileSystem(AsyncFileSystem):
             key = username
         if password:
             secret = password
+        
+        self.endpoint_url = endpoint_url
 
         self.anon = anon
         self.key = key
@@ -460,6 +463,7 @@ class S3FileSystem(AsyncFileSystem):
             aws_access_key_id=self.key,
             aws_secret_access_key=self.secret,
             aws_session_token=self.token,
+            endpoint_url=self.endpoint_url,
         )
         init_kwargs = {
             key: value
@@ -476,6 +480,7 @@ class S3FileSystem(AsyncFileSystem):
                 "aws_access_key_id",
                 "aws_secret_access_key",
                 "aws_session_token",
+                "endpoint_url",
             }
             init_kwargs = {
                 key: value for key, value in init_kwargs.items() if key not in drop_keys
