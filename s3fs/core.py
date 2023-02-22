@@ -184,10 +184,15 @@ class S3FileSystem(AsyncFileSystem):
         Whether to use anonymous connection (public buckets only). If False,
         uses the key/secret given, or boto's credential resolver (client_kwargs,
         environment, variables, config files, EC2 IAM server, in that order)
+    endpoint_url : string (None)
+        Use this endpoint_url, if specified. Needed for connecting to non-AWS
+        S3 buckets. Takes precedence over `endpoint_url` in client_kwargs.
     key : string (None)
-        If not anonymous, use this access key ID, if specified
+        If not anonymous, use this access key ID, if specified. Takes precedence 
+        over `aws_access_key_id` in client_kwargs.
     secret : string (None)
-        If not anonymous, use this secret access key, if specified
+        If not anonymous, use this secret access key, if specified. Takes 
+        precedence over `aws_secret_access_key` in client_kwargs.
     token : string (None)
         If not anonymous, use this security token, if specified
     use_ssl : bool (True)
