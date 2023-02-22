@@ -198,18 +198,25 @@ For a self-hosted MinIO instance:
    # When relying on auto discovery for credentials
    >>> s3 = s3fs.S3FileSystem(
          anon=False,
-         client_kwargs={
-            'endpoint_url': 'https://...'
-         }
+         endpoint_url='https://...'
       )
    # Or passing the credentials directly
    >>> s3 = s3fs.S3FileSystem(
          key='miniokey...',
          secret='asecretkey...',
-         client_kwargs={
-            'endpoint_url': 'https://...'
-         }
+         endpoint_url='https://...'
       )
+
+It is also possible to set credentials through envrironment variables:
+
+.. code-block:: python
+   # export FSSPEC_S3_ENDPOINT_URL=https://...
+   # export FSSPEC_S3_KEY='miniokey...'
+   # export FSSPEC_S3_SECRET='asecretkey...'
+   >>> s3 = s3fs.S3FileSystem()
+   # or ...
+   >>> f = fsspec.open("s3://minio-bucket/...")
+
 
 For Storj DCS via the `S3-compatible Gateway <https://docs.storj.io/dcs/getting-started/quickstart-aws-sdk-and-hosted-gateway-mt>`_:
 
@@ -218,17 +225,13 @@ For Storj DCS via the `S3-compatible Gateway <https://docs.storj.io/dcs/getting-
    # When relying on auto discovery for credentials
    >>> s3 = s3fs.S3FileSystem(
          anon=False,
-         client_kwargs={
-            'endpoint_url': 'https://gateway.storjshare.io'
-         }
+         endpoint_url='https://gateway.storjshare.io'
       )
    # Or passing the credentials directly
    >>> s3 = s3fs.S3FileSystem(
          key='accesskey...',
          secret='asecretkey...',
-         client_kwargs={
-            'endpoint_url': 'https://gateway.storjshare.io'
-         }
+         endpoint_url='https://gateway.storjshare.io'
       )
 
 For a Scaleway s3-compatible storage in the ``fr-par`` zone:
@@ -238,8 +241,8 @@ For a Scaleway s3-compatible storage in the ``fr-par`` zone:
    >>> s3 = s3fs.S3FileSystem(
       key='scaleway-api-key...',
       secret='scaleway-secretkey...',
+      endpoint_url='https://s3.fr-par.scw.cloud',
       client_kwargs={
-         'endpoint_url': 'https://s3.fr-par.scw.cloud',
          'region_name': 'fr-par'
       }
    )
@@ -251,8 +254,8 @@ For an OVH s3-compatible storage in the ``GRA`` zone:
    >>> s3 = s3fs.S3FileSystem(
       key='ovh-s3-key...',
       secret='ovh-s3-secretkey...',
+      endpoint_url='https://s3.GRA.cloud.ovh.net',
       client_kwargs={
-         'endpoint_url': 'https://s3.GRA.cloud.ovh.net',
          'region_name': 'GRA'
       },
       config_kwargs={
