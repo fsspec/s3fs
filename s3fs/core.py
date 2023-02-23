@@ -485,7 +485,6 @@ class S3FileSystem(AsyncFileSystem):
                 "aws_access_key_id",
                 "aws_secret_access_key",
                 "aws_session_token",
-                "endpoint_url",
             }
             init_kwargs = {
                 key: value for key, value in init_kwargs.items() if key not in drop_keys
