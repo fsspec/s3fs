@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2023.3.0
+--------
+
+- Allow setting endpoint_url as top-level kwarg (#704)
+- minimum python version 3.8 (#702)
+- Update docs config (#697)
+- get/put/cp recursive extra tests (#691)
+
 2023.1.0
 --------
 
