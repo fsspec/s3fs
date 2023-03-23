@@ -31,7 +31,9 @@ jobs:
       - name: Install
         shell: bash -l {0}
         run: |
-          pip install git+https://github.com/fsspec/filesystem_spec
+          # Temporary fix so that fsspec.tests is available.
+          pip install -ve git+https://github.com/fsspec/filesystem_spec#egg=fsspec
+          #pip install git+https://github.com/fsspec/filesystem_spec
           pip install . --no-deps
 
       - name: Run Tests
