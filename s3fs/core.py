@@ -899,8 +899,7 @@ class S3FileSystem(AsyncFileSystem):
     makedirs = sync_wrapper(_makedirs)
 
     async def _rmdir(self, path):
-        bucket, key = self.split_path(path)
-        if key:
+        if "/" in path:
             if await self._exists(path):
                 # did you mean rm(path, recursive=True) ?
                 raise FileExistsError
