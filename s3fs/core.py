@@ -899,6 +899,7 @@ class S3FileSystem(AsyncFileSystem):
     makedirs = sync_wrapper(_makedirs)
 
     async def _rmdir(self, path):
+        path = self._strip_protocol(path).rstrip("/")
         if "/" in path:
             if await self._exists(path):
                 # did you mean rm(path, recursive=True) ?
