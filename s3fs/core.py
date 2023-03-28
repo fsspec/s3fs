@@ -223,7 +223,7 @@ class S3FileSystem(AsyncFileSystem):
         for performance reasons. When set to True, filesystem instances will
         use the S3 ListObjectVersions API call to list directory contents,
         which requires listing all historical object versions.
-    cache_regions : bool (False)
+    cache_regions : bool (True)
         Whether to cache bucket regions or not. Whenever a new bucket is used,
         it will first find out which region it belongs and then use the client
         for that region.
@@ -278,7 +278,7 @@ class S3FileSystem(AsyncFileSystem):
         session=None,
         username=None,
         password=None,
-        cache_regions=False,
+        cache_regions=True,
         asynchronous=False,
         loop=None,
         **kwargs,
@@ -899,6 +899,12 @@ class S3FileSystem(AsyncFileSystem):
     makedirs = sync_wrapper(_makedirs)
 
     async def _rmdir(self, path):
+        bucket, key = self.split_path(path)
+        if key:
+            if await self._exists(path):
+                # did you mean rm(path, recursive=True) ?
+                raise FileExistsError
+            raise FileNotFoundError
         try:
             await self._call_s3("delete_bucket", Bucket=path)
         except botocore.exceptions.ClientError as e:
