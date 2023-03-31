@@ -2574,3 +2574,24 @@ def test_cp_two_files(s3):
         target + "/file0",
         target + "/file1",
     ]
+
+
+def test_get_two_files(s3, tmpdir):
+    src = test_bucket_name + "/src"
+    file0 = src + "/file0"
+    file1 = src + "/file1"
+    s3.mkdir(src)
+    s3.touch(file0)
+    s3.touch(file1)
+
+    target = os.path.join(tmpdir, "target")
+    target_fs = fsspec.filesystem("file")
+    assert not s3.exists(target)
+
+    s3.get([file0, file1], target)
+
+    assert target_fs.isdir(target)
+    assert sorted(target_fs.find(target)) == [
+        os.path.join(target, "file0"),
+        os.path.join(target, "file1"),
+    ]
