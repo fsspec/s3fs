@@ -2584,7 +2584,7 @@ def test_get_two_files(s3, tmpdir):
     s3.touch(file0)
     s3.touch(file1)
 
-    target = os.path.join(tmpdir, "target")
+    target = os.path.join(tmpdir, "target/")
     target_fs = fsspec.filesystem("file")
     assert not s3.exists(target)
 
