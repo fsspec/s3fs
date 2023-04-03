@@ -63,6 +63,9 @@ class S3fsFixtures(AbstractFixtures):
     def fs_path():
         return test_bucket_name
 
+    def supports_empty_directories(self):
+        return False
+
     @staticmethod
     @pytest.fixture
     def _get_boto3_client():
