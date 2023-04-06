@@ -210,6 +210,7 @@ For a self-hosted MinIO instance:
 It is also possible to set credentials through envrironment variables:
 
 .. code-block:: python
+
    # export FSSPEC_S3_ENDPOINT_URL=https://...
    # export FSSPEC_S3_KEY='miniokey...'
    # export FSSPEC_S3_SECRET='asecretkey...'
