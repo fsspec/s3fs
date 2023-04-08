@@ -2282,6 +2282,7 @@ class S3File(AbstractBufferedFile):
             )
             self.mpu = None
 
+
 class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
     def __init__(self, fs, path, mode):
         self.fs = fs
