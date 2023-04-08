@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2023.4.0
+--------
+
+- Add streaming async read file (#722)
+- Doc fixes (#721)
+- aiobotocore to 2.5.0 (#710)
+
 2023.3.0
 --------
 
