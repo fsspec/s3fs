@@ -2574,3 +2574,23 @@ def test_cp_two_files(s3):
         target + "/file0",
         target + "/file1",
     ]
+
+
+def test_async_stream(s3_base):
+    fn = test_bucket_name + "/target"
+    data = b"hello world" * 1000
+    out = []
+
+    async def read_stream():
+        fs = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri})
+        await fs._mkdir(test_bucket_name)
+        await fs._pipe(fn, data)
+        f = await fs.open_async(fn, mode="rb", block_seze=1000)
+        while True:
+            got = await f.read(1000)
+            if not got:
+                break
+            out.append(got)
+
+    asyncio.run(read_stream())
+    assert b"".join(out) == data

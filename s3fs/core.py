@@ -16,6 +16,7 @@ from fsspec.spec import AbstractBufferedFile
 from fsspec.utils import infer_storage_options, tokenize, setup_logging as setup_logger
 from fsspec.asyn import (
     AsyncFileSystem,
+    AbstractAsyncStreamedFile,
     sync,
     sync_wrapper,
     FSTimeoutError,
@@ -1938,6 +1939,11 @@ class S3FileSystem(AsyncFileSystem):
 
     invalidate_region_cache = sync_wrapper(_invalidate_region_cache)
 
+    async def open_async(self, path, mode="rb", **kwargs):
+        if "b" not in mode or kwargs.get("compression"):
+            raise ValueError
+        return S3AsyncStreamedFile(self, path, mode)
+
 
 class S3File(AbstractBufferedFile):
     """
@@ -2275,6 +2281,20 @@ class S3File(AbstractBufferedFile):
                 UploadId=self.mpu["UploadId"],
             )
             self.mpu = None
+
+class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
+    def __init__(self, fs, path, mode):
+        self.fs = fs
+        self.path = path
+        self.mode = mode
+        self.r = None
+
+    async def read(self, length=-1):
+        if self.r is None:
+            bucket, key, gen = self.fs.split_path(self.path)
+            r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
+            self.r = r["Body"]
+        return await self.r.read(length)
 
 
 def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
