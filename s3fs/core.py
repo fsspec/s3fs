@@ -1863,7 +1863,7 @@ class S3FileSystem(AsyncFileSystem):
         files = [p for p in paths if self.split_path(p)[1]]
         dirs = [p for p in paths if not self.split_path(p)[1]]
         # TODO: fails if more than one bucket in list
-        await _run_coros_in_chunks(
+        out = await _run_coros_in_chunks(
             [
                 self._bulk_delete(files[i : i + 1000])
                 for i in range(0, len(files), 1000)
@@ -1871,7 +1871,7 @@ class S3FileSystem(AsyncFileSystem):
             batch_size=3,
             nofiles=True,
         )
-        out = await asyncio.gather(*[self._rmdir(d) for d in dirs])
+        await asyncio.gather(*[self._rmdir(d) for d in dirs])
         [
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
             for p in paths
