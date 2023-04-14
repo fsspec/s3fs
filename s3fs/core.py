@@ -1841,7 +1841,9 @@ class S3FileSystem(AsyncFileSystem):
         }
         for path in pathlist:
             self.invalidate_cache(self._parent(path))
-        await self._call_s3("delete_objects", kwargs, Bucket=bucket, Delete=delete_keys)
+        return await self._call_s3(
+            "delete_objects", kwargs, Bucket=bucket, Delete=delete_keys
+        )
 
     async def _rm_file(self, path, **kwargs):
         bucket, key, _ = self.split_path(path)
@@ -1869,11 +1871,12 @@ class S3FileSystem(AsyncFileSystem):
             batch_size=3,
             nofiles=True,
         )
-        await asyncio.gather(*[self._rmdir(d) for d in dirs])
+        out = await asyncio.gather(*[self._rmdir(d) for d in dirs])
         [
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
             for p in paths
         ]
+        return out
 
     async def _is_bucket_versioned(self, bucket):
         return (await self._call_s3("get_bucket_versioning", Bucket=bucket)).get(
