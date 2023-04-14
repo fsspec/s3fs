@@ -1841,9 +1841,12 @@ class S3FileSystem(AsyncFileSystem):
         }
         for path in pathlist:
             self.invalidate_cache(self._parent(path))
-        return await self._call_s3(
+        out = await self._call_s3(
             "delete_objects", kwargs, Bucket=bucket, Delete=delete_keys
         )
+        # TODO: we report on successes but don't raise on any errors, effectively
+        #  on_error="omit"
+        return [f"{bucket}/{_['Key']}" for _ in out.get("Deleted", [])]
 
     async def _rm_file(self, path, **kwargs):
         bucket, key, _ = self.split_path(path)
@@ -1876,7 +1879,7 @@ class S3FileSystem(AsyncFileSystem):
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
             for p in paths
         ]
-        return out
+        return sum(out, [])
 
     async def _is_bucket_versioned(self, bucket):
         return (await self._call_s3("get_bucket_versioning", Bucket=bucket)).get(

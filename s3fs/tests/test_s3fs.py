@@ -576,11 +576,13 @@ def test_rm(s3):
     #    s3.rm(test_bucket_name + '/nonexistent')
     with pytest.raises(FileNotFoundError):
         s3.rm("nonexistent")
-    s3.rm(test_bucket_name + "/nested", recursive=True)
+    out = s3.rm(test_bucket_name + "/nested", recursive=True)
+    assert test_bucket_name + "/nested/nested2/file1" in out
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
 
     # whole bucket
-    s3.rm(test_bucket_name, recursive=True)
+    out = s3.rm(test_bucket_name, recursive=True)
+    assert test_bucket_name + "/2014-01-01.csv" in out
     assert not s3.exists(test_bucket_name + "/2014-01-01.csv")
     assert not s3.exists(test_bucket_name)
 
