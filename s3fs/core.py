@@ -2304,21 +2304,6 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         return await self.r.read(length)
 
 
-class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
-    def __init__(self, fs, path, mode):
-        self.fs = fs
-        self.path = path
-        self.mode = mode
-        self.r = None
-
-    async def read(self, length=-1):
-        if self.r is None:
-            bucket, key, gen = self.fs.split_path(self.path)
-            r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
-            self.r = r["Body"]
-        return await self.r.read(length)
-
-
 def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
     if req_kw is None:
         req_kw = {}
