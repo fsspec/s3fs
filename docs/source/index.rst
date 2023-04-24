@@ -29,10 +29,10 @@ Simple locate and read a file:
 .. code-block:: python
 
    >>> import s3fs
-   >>> fs = s3fs.S3FileSystem(anon=True)
-   >>> fs.ls('my-bucket')
+   >>> s3 = s3fs.S3FileSystem(anon=True)
+   >>> s3.ls('my-bucket')
    ['my-file.txt']
-   >>> with fs.open('my-bucket/my-file.txt', 'rb') as f:
+   >>> with s3.open('my-bucket/my-file.txt', 'rb') as f:
    ...     print(f.read())
    b'Hello, world'
 
