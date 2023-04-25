@@ -2147,6 +2147,29 @@ def test_shallow_find(s3):
     assert s3.ls(test_bucket_name) == s3.glob(test_bucket_name + "/*")
 
 
+def test_multi_find(s3):
+    s3.mkdir("bucket/test")
+    s3.mkdir("bucket/test/sub")
+    s3.write_text("bucket/test/file.txt", "some_text")
+    s3.write_text("bucket/test/sub/file.txt", "some_text")
+
+    out1 = s3.find("bucket", withdirs=True)
+    out2 = s3.find("bucket", withdirs=True)
+    assert (
+        out1
+        == out2
+        == [
+            "bucket/test",
+            "bucket/test/file.txt",
+            "bucket/test/sub",
+            "bucket/test/sub/file.txt",
+        ]
+    )
+    out1 = s3.find("bucket", withdirs=False)
+    out2 = s3.find("bucket", withdirs=False)
+    assert out1 == out2 == ["bucket/test/file.txt", "bucket/test/sub/file.txt"]
+
+
 def test_version_sizes(s3):
     # protect against caching of incorrect version details
     s3 = S3FileSystem(

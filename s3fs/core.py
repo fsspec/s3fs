@@ -820,25 +820,24 @@ class S3FileSystem(AsyncFileSystem):
         thisdircache = {}
         for o in out:
             par = self._parent(o["name"])
-            if par not in self.dircache:
-                if par not in sdirs:
-                    sdirs.add(par)
-                    d = False
-                    if len(path) <= len(par):
-                        d = {
-                            "Key": self.split_path(par)[1],
-                            "Size": 0,
-                            "name": par,
-                            "StorageClass": "DIRECTORY",
-                            "type": "directory",
-                            "size": 0,
-                        }
-                        dirs.append(d)
-                    thisdircache[par] = []
-                    ppar = self._parent(par)
-                    if ppar in thisdircache:
-                        if d and d not in thisdircache[ppar]:
-                            thisdircache[ppar].append(d)
+            if par not in sdirs:
+                sdirs.add(par)
+                d = False
+                if len(path) <= len(par):
+                    d = {
+                        "Key": self.split_path(par)[1],
+                        "Size": 0,
+                        "name": par,
+                        "StorageClass": "DIRECTORY",
+                        "type": "directory",
+                        "size": 0,
+                    }
+                    dirs.append(d)
+                thisdircache[par] = []
+                ppar = self._parent(par)
+                if ppar in thisdircache:
+                    if d and d not in thisdircache[ppar]:
+                        thisdircache[ppar].append(d)
             if par in sdirs:
                 thisdircache[par].append(o)
         if not prefix:
