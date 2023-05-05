@@ -374,7 +374,7 @@ def test_checksum(s3):
     s3.checksum(path1, refresh=True)
 
 
-test_xattr_sample_metadata = {"test_xattr": "1"}
+test_xattr_sample_metadata = {"testxattr": "1"}
 
 
 def test_xattr(s3):
@@ -389,7 +389,7 @@ def test_xattr(s3):
         },
     }
 
-    sync(
+    resp = sync(
         s3.loop,
         s3.s3.put_object,
         Bucket=bucket,
@@ -406,18 +406,16 @@ def test_xattr(s3):
         in sync(s3.loop, s3.s3.get_object_acl, Bucket=bucket, Key=key)["Grants"]
     )
 
-    assert (
-        s3.getxattr(filename, "test_xattr") == test_xattr_sample_metadata["test_xattr"]
-    )
-    assert s3.metadata(filename) == {"test-xattr": "1"}  # note _ became -
+    assert s3.getxattr(filename, "testxattr") == test_xattr_sample_metadata["testxattr"]
+    assert s3.metadata(filename) == {"testxattr": "1"}  # note _ became -
 
     s3file = s3.open(filename)
-    assert s3file.getxattr("test_xattr") == test_xattr_sample_metadata["test_xattr"]
-    assert s3file.metadata() == {"test-xattr": "1"}  # note _ became -
+    assert s3file.getxattr("testxattr") == test_xattr_sample_metadata["testxattr"]
+    assert s3file.metadata() == {"testxattr": "1"}  # note _ became -
 
-    s3file.setxattr(test_xattr="2")
-    assert s3file.getxattr("test_xattr") == "2"
-    s3file.setxattr(**{"test_xattr": None})
+    s3file.setxattr(testxattr="2")
+    assert s3file.getxattr("testxattr") == "2"
+    s3file.setxattr(**{"testxattr": None})
     assert s3file.metadata() == {}
     assert s3.cat(filename) == body
 
