@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2023.5.0
+--------
+
+- Fix "_" in xattrs tests (#732)
+- Fix file pointer already at end of file when retrying put (#731)
+- Fix repeated find corrupting cache (#730)
+- Remove duplicate class definition (#727)
+- return list of deleted keys in bulk deleted (#726)
+
+
 2023.4.0
 --------
 
