@@ -16,9 +16,9 @@ endpoint_uri = "http://127.0.0.1:%s/" % port
 
 
 class S3fsFixtures(AbstractFixtures):
-    @staticmethod
-    @pytest.fixture
-    def fs(_s3_base, _get_boto3_client):
+    @pytest.fixture(scope="class")
+    def fs(self, _s3_base, _get_boto3_client):
+        print("FS")
         client = _get_boto3_client
         client.create_bucket(Bucket=test_bucket_name, ACL="public-read")
 
@@ -58,26 +58,23 @@ class S3fsFixtures(AbstractFixtures):
         s3.invalidate_cache()
         yield s3
 
-    @staticmethod
     @pytest.fixture
-    def fs_path():
+    def fs_path(self):
         return test_bucket_name
 
     def supports_empty_directories(self):
         return False
 
-    @staticmethod
-    @pytest.fixture
-    def _get_boto3_client():
+    @pytest.fixture(scope="class")
+    def _get_boto3_client(self):
         from botocore.session import Session
 
         # NB: we use the sync botocore client for setup
         session = Session()
         return session.create_client("s3", endpoint_url=endpoint_uri)
 
-    @staticmethod
-    @pytest.fixture
-    def _s3_base():
+    @pytest.fixture(scope="class")
+    def _s3_base(self):
         # writable local S3 system
         import shlex
         import subprocess
