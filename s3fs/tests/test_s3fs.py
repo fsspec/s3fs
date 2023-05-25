@@ -1352,7 +1352,6 @@ def test_append(s3):
         ServerSideEncryption="AES256",
         StorageClass="REDUCED_REDUNDANCY",
         WebsiteRedirectLocation="https://www.example.com/",
-        BucketKeyEnabled=False,
     )
     with s3.open(a, "wb", **head) as f:
         f.write(b"data")
@@ -1368,7 +1367,6 @@ def test_append(s3):
             ).items()
             if k in head
         }
-        filehead.pop("BucketKeyEnabled", None)  # new in moto 4.1.10
         assert filehead == head
 
 
