@@ -1368,6 +1368,7 @@ def test_append(s3):
             ).items()
             if k in head
         }
+        filehead.pop("BucketKeyEnabled")  # new in moto 4.1.10
         assert filehead == head
 
 
