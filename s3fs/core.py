@@ -2296,6 +2296,13 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         self.mode = mode
         self.r = None
         self.loc = 0
+        self._details = None
+
+    @property
+    async def size(self):
+        if self._details is None:
+            self._details = await self.fs._info(self.path)
+        return self._details["size"]
 
     async def read(self, length=-1):
         if self.r is None:
