@@ -18,7 +18,6 @@ endpoint_uri = "http://127.0.0.1:%s/" % port
 class S3fsFixtures(AbstractFixtures):
     @pytest.fixture(scope="class")
     def fs(self, _s3_base, _get_boto3_client):
-        print("FS")
         client = _get_boto3_client
         client.create_bucket(Bucket=test_bucket_name, ACL="public-read")
 
