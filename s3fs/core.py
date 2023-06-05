@@ -2296,6 +2296,7 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         self.mode = mode
         self.r = None
         self.loc = 0
+        self.size = None
 
     async def read(self, length=-1):
         if self.r is None:
