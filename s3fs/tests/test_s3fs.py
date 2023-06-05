@@ -2614,6 +2614,7 @@ def test_async_stream(s3_base):
         f = await fs.open_async(fn, mode="rb", block_seze=1000)
         while True:
             got = await f.read(1000)
+            assert f.size == len(data)
             assert f.tell()
             if not got:
                 break

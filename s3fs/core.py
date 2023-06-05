@@ -2301,6 +2301,7 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         if self.r is None:
             bucket, key, gen = self.fs.split_path(self.path)
             r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
+            self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
             self.r = r["Body"]
         out = await self.r.read(length)
         self.loc += len(out)
