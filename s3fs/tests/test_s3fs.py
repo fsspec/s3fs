@@ -1508,8 +1508,11 @@ def test_tags(s3):
     assert s3.get_tags(fname) == tagset
 
 
-def test_versions(s3):
-    versioned_file = versioned_bucket_name + "/versioned_file"
+@pytest.mark.parametrize("prefix", ["", "/dir", "/dir/subdir"])
+def test_versions(s3, prefix):
+    parent = versioned_bucket_name + prefix
+    versioned_file = parent + "/versioned_file"
+
     s3 = S3FileSystem(
         anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
     )
@@ -1536,6 +1539,17 @@ def test_versions(s3):
     with s3.open(versioned_file, version_id=first_version) as fo:
         assert fo.version_id == first_version
         assert fo.read() == b"1"
+
+    versioned_file_v1 = f"{versioned_file}?versionId={first_version}"
+    versioned_file_v2 = f"{versioned_file}?versionId={second_version}"
+
+    assert s3.ls(parent) == [versioned_file]
+    assert set(s3.ls(parent, versions=True)) == {versioned_file_v1, versioned_file_v2}
+
+    assert s3.exists(versioned_file_v1)
+    assert s3.info(versioned_file_v1)
+    assert s3.exists(versioned_file_v2)
+    assert s3.info(versioned_file_v2)
 
 
 def test_list_versions_many(s3):

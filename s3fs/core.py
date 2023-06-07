@@ -967,6 +967,28 @@ class S3FileSystem(AsyncFileSystem):
                 return files
         return files if detail else sorted([o["name"] for o in files])
 
+    def _exists_in_cache(self, path, bucket, key, version_id):
+        fullpath = "/".join((bucket, key))
+
+        try:
+            entries = self._ls_from_cache(fullpath)
+        except FileNotFoundError:
+            return False
+
+        if entries is None:
+            return None
+
+        if not self.version_aware or version_id is None:
+            return True
+
+        for entry in entries:
+            if entry["name"] == fullpath and entry.get("VersionId") == version_id:
+                return True
+
+        # dircache doesn't support multiple versions, so we really can't tell if
+        # the one we want exists.
+        return None
+
     async def _exists(self, path):
         if path in ["", "/"]:
             # the root always exists, even if anon
@@ -974,11 +996,10 @@ class S3FileSystem(AsyncFileSystem):
         path = self._strip_protocol(path)
         bucket, key, version_id = self.split_path(path)
         if key:
-            try:
-                if self._ls_from_cache(path):
-                    return True
-            except FileNotFoundError:
-                return False
+            exists_in_cache = self._exists_in_cache(path, bucket, key, version_id)
+            if exists_in_cache is not None:
+                return exists_in_cache
+
             try:
                 await self._info(path, bucket, key, version_id=version_id)
                 return True
@@ -1216,6 +1237,8 @@ class S3FileSystem(AsyncFileSystem):
     async def _info(self, path, bucket=None, key=None, refresh=False, version_id=None):
         path = self._strip_protocol(path)
         bucket, key, path_version_id = self.split_path(path)
+        fullpath = "/".join((bucket, key))
+
         if version_id is not None:
             if not self.version_aware:
                 raise ValueError(
@@ -1226,7 +1249,7 @@ class S3FileSystem(AsyncFileSystem):
             return {"name": path, "size": 0, "type": "directory"}
         version_id = _coalesce_version_id(path_version_id, version_id)
         if not refresh:
-            out = self._ls_from_cache(path)
+            out = self._ls_from_cache(fullpath)
             if out is not None:
                 if self.version_aware and version_id is not None:
                     # If cached info does not match requested version_id,
@@ -1234,7 +1257,7 @@ class S3FileSystem(AsyncFileSystem):
                     out = [
                         o
                         for o in out
-                        if o["name"] == path and version_id == o.get("VersionId")
+                        if o["name"] == fullpath and version_id == o.get("VersionId")
                     ]
                     if out:
                         return out[0]
