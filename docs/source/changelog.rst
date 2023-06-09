@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2023.6.0
+--------
+
+- allow versions in info.exists (#746)
+- streaming file to update it's size for tell (#745, 741)
+
+
 2023.5.0
 --------
 
