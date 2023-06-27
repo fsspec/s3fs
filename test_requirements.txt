@@ -1,5 +1,6 @@
 mock; python_version < '3.3'
 moto>=4
 flask
+flask_cors
 pytest>=4.2.0
 pytest-env
