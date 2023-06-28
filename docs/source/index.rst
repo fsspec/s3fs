@@ -3,7 +3,7 @@ S3Fs
 
 S3Fs is a Pythonic file interface to S3.  It builds on top of botocore_.
 
-The top-level class ``S3FileSystem`` holds connection information and allows
+The top-level class :py:class:`.S3FileSystem` holds connection information and allows
 typical file-system style operations like ``cp``, ``mv``, ``ls``, ``du``,
 ``glob``, etc., as well as put/get of local files to/from S3.
 
@@ -11,8 +11,8 @@ The connection can be anonymous - in which case only publicly-available,
 read-only buckets are accessible - or via credentials explicitly supplied
 or in configuration files.
 
-Calling ``open()`` on a ``S3FileSystem`` (typically using a context manager)
-provides an ``S3File`` for read or write access to a particular key. The object
+Calling ``open()`` on a :py:class:`.S3FileSystem` (typically using a context manager)
+provides an :py:class:`.S3File` for read or write access to a particular key. The object
 emulates the standard ``File`` protocol (``read``, ``write``, ``tell``,
 ``seek``), such that functions expecting a file can access S3. Only binary read
 and write modes are implemented, with blocked caching.
@@ -72,7 +72,7 @@ Integration
 The libraries ``intake``, ``pandas`` and ``dask`` accept URLs with the prefix
 "s3://", and will use s3fs to complete the IO operation in question. The
 IO functions take an argument ``storage_options``, which will be passed
-to ``S3FileSystem``, for example:
+to :py:class:`.S3FileSystem`, for example:
 
 .. code-block:: python
 
@@ -87,7 +87,7 @@ Async
 -----
 
 ``s3fs`` is implemented using ``aiobotocore``, and offers async functionality.
-A number of methods of ``S3FileSystem`` are ``async``, for for each of these,
+A number of methods of :py:class:`.S3FileSystem` are ``async``, for for each of these,
 there is also a synchronous version with the same name and lack of a ``_``
 prefix.
 
@@ -153,7 +153,7 @@ Python's standard `logging framework`_.
 Credentials
 -----------
 
-The AWS key and secret may be provided explicitly when creating an ``S3FileSystem``.
+The AWS key and secret may be provided explicitly when creating an :py:class:`.S3FileSystem`.
 A more secure way, not including the credentials directly in code, is to allow
 boto to establish the credentials automatically. Boto will try the following
 methods, in order:
@@ -165,14 +165,14 @@ methods, in order:
 
 - for nodes on EC2, the IAM metadata provider
 
-You can specify a profile using `s3fs.S3FileSystem(profile='PROFILE')`.
+You can specify a profile using ``s3fs.S3FileSystem(profile='PROFILE')``.
 Otherwise ``sf3s`` will use authentication via `boto environment variables`_.
 
 .. _boto environment variables: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#using-environment-variables
 
 In a distributed environment, it is not expected that raw credentials should
 be passed between machines. In the explicitly provided credentials case, the
-method ``get_delegated_s3pars()`` can be used to obtain temporary credentials.
+method :py:meth:`.S3FileSystem.get_delegated_s3pars` can be used to obtain temporary credentials.
 When not using explicit credentials, it should be expected that every machine
 also has the appropriate environment variables, config files or IAM roles
 available.
@@ -180,7 +180,7 @@ available.
 If none of the credential methods are available, only anonymous access will
 work, and ``anon=True`` must be passed to the constructor.
 
-Furthermore, ``S3FileSystem.current()`` will return the most-recently created
+Furthermore, :py:meth:`.S3FileSystem.current` will return the most-recently created
 instance, so this method could be used in preference to the constructor in
 cases where the code must be agnostic of the credentials/config used.
 
@@ -207,7 +207,7 @@ For a self-hosted MinIO instance:
          endpoint_url='https://...'
       )
 
-It is also possible to set credentials through envrironment variables:
+It is also possible to set credentials through environment variables:
 
 .. code-block:: python
 
