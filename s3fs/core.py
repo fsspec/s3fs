@@ -1028,8 +1028,8 @@ class S3FileSystem(AsyncFileSystem):
                 return False
             except PermissionError:
                 logger.warning(
-                    "Bucket %s doesn't exist or you don't have access to it.",
-                    bucket)
+                    "Bucket %s doesn't exist or you don't have access to it.", bucket
+                )
                 return False
 
     exists = sync_wrapper(_exists)
