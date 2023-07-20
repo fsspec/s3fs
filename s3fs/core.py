@@ -1019,12 +1019,17 @@ class S3FileSystem(AsyncFileSystem):
                     "list_objects_v2", MaxKeys=1, Bucket=bucket, **self.req_kw
                 )
                 return True
-            except Exception:
+            except (FileNotFoundError, PermissionError):
                 pass
             try:
                 await self._call_s3("get_bucket_location", Bucket=bucket, **self.req_kw)
                 return True
-            except Exception:
+            except FileNotFoundError:
+                return False
+            except PermissionError as e:
+                logger.warning(
+                    "Bucket %s doesn't exist or you don't have access to it.",
+                    bucket)
                 return False
 
     exists = sync_wrapper(_exists)
