@@ -1026,7 +1026,7 @@ class S3FileSystem(AsyncFileSystem):
                 return True
             except FileNotFoundError:
                 return False
-            except PermissionError as e:
+            except PermissionError:
                 logger.warning(
                     "Bucket %s doesn't exist or you don't have access to it.",
                     bucket)
