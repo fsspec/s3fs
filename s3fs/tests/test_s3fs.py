@@ -2469,18 +2469,19 @@ def test_exists_raises_on_connection_error(monkeypatch):
     # Ensure that we raise a ConnectionError instead of returning False if we
     # are not actually able to connect to storage, by setting a fake proxy and
     # then re-creating the S3FileSystem instance.
-    monkeypatch.setenv('https_proxy', 'https://fakeproxy.127.0.0.1:8080')
+    monkeypatch.setenv("https_proxy", "https://fakeproxy.127.0.0.1:8080")
     S3FileSystem.clear_instance_cache()
     s3 = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri})
     s3.invalidate_cache()
     with pytest.raises(EndpointConnectionError):
-        s3.exists('this-bucket-does-not-exist/')
+        s3.exists("this-bucket-does-not-exist/")
 
 
 def test_exists_bucket_nonexistent_or_no_access(caplog):
     # Ensure that a warning is raised and False is returned if querying a
     # bucket that might either not exist or be private.
-    fs = s3fs.S3FileSystem(key="asdfasfsdf", secret="sadfdsfds")
+    caplog.clear()
+    fs = s3fs.S3FileSystem(key="wrongkey", secret="wrongsecret")
     assert not fs.exists("s3://this-bucket-might-not-exist/")
     assert caplog.records[0].levelname == "WARNING"
     assert "doesn't exist or you don't have access" in caplog.text
@@ -2489,7 +2490,7 @@ def test_exists_bucket_nonexistent_or_no_access(caplog):
 def test_exists_bucket_nonexistent(s3, caplog):
     # Ensure that NO warning is raised and False is returned if checking bucket
     # existance when we have full access.
-    assert not s3.exists('non_existent_bucket/')
+    assert not s3.exists("non_existent_bucket/")
     assert len(caplog.records) == 0
 
 
