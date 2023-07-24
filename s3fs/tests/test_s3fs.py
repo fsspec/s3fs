@@ -2471,7 +2471,11 @@ def test_exists_raises_on_connection_error(monkeypatch):
     # then re-creating the S3FileSystem instance.
     monkeypatch.setenv("https_proxy", "https://fakeproxy.127.0.0.1:8080")
     S3FileSystem.clear_instance_cache()
-    s3 = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri})
+    s3 = S3FileSystem(
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        skip_instance_cache=True,
+    )
     s3.invalidate_cache()
     with pytest.raises(EndpointConnectionError):
         s3.exists("this-bucket-does-not-exist/")
@@ -2480,6 +2484,7 @@ def test_exists_raises_on_connection_error(monkeypatch):
 def test_exists_bucket_nonexistent_or_no_access(caplog):
     # Ensure that a warning is raised and False is returned if querying a
     # bucket that might either not exist or be private.
+    # This tests against real AWS, might fail due to network issues.
     caplog.clear()
     fs = s3fs.S3FileSystem(key="wrongkey", secret="wrongsecret")
     assert not fs.exists("s3://this-bucket-might-not-exist/")
