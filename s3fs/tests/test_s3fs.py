@@ -2465,7 +2465,7 @@ def test_exists_isdir(s3):
     assert not s3.isdir(bad_path)
 
 
-def test_exists_raises_on_connection_error(monkeypatch):
+def test_exists_raises_on_connection_error():
     # Ensure that we raise a ConnectionError instead of returning False if we
     # are not actually able to connect to storage, by setting a fake proxy and
     # then re-creating the S3FileSystem instance.
