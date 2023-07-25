@@ -2473,7 +2473,7 @@ def test_exists_raises_on_connection_error(monkeypatch):
     s3 = S3FileSystem(
         anon=False,
         skip_instance_cache=True,
-        endpoint_url="https://fakeproxy.127.0.0.1:8080/"
+        endpoint_url="https://fakeproxy.127.0.0.1:8080/",
     )
     s3.invalidate_cache()
     with pytest.raises(EndpointConnectionError):
