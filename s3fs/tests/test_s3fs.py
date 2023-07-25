@@ -2472,7 +2472,6 @@ def test_exists_raises_on_connection_error(monkeypatch):
     S3FileSystem.clear_instance_cache()
     s3 = S3FileSystem(
         anon=False,
-        client_kwargs={"endpoint_url": endpoint_uri},
         skip_instance_cache=True,
         endpoint_url="https://fakeproxy.127.0.0.1:8080/"
     )
@@ -2495,6 +2494,7 @@ def test_exists_bucket_nonexistent_or_no_access(caplog):
 def test_exists_bucket_nonexistent(s3, caplog):
     # Ensure that NO warning is raised and False is returned if checking bucket
     # existance when we have full access.
+    caplog.clear()
     assert not s3.exists("non_existent_bucket/")
     assert len(caplog.records) == 0
 
