@@ -2469,12 +2469,12 @@ def test_exists_raises_on_connection_error(monkeypatch):
     # Ensure that we raise a ConnectionError instead of returning False if we
     # are not actually able to connect to storage, by setting a fake proxy and
     # then re-creating the S3FileSystem instance.
-    monkeypatch.setenv("https_proxy", "https://fakeproxy.127.0.0.1:8080")
     S3FileSystem.clear_instance_cache()
     s3 = S3FileSystem(
         anon=False,
         client_kwargs={"endpoint_url": endpoint_uri},
         skip_instance_cache=True,
+        endpoint_url="https://fakeproxy.127.0.0.1:8080/"
     )
     s3.invalidate_cache()
     with pytest.raises(EndpointConnectionError):
