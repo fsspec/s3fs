@@ -1879,6 +1879,7 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _rm_file(self, path, **kwargs):
         bucket, key, _ = self.split_path(path)
+        self.invalidate_cache(path)
 
         try:
             await self._call_s3("delete_object", Bucket=bucket, Key=key)

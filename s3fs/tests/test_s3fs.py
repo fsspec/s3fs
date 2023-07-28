@@ -2636,3 +2636,20 @@ def test_async_stream(s3_base):
 
     asyncio.run(read_stream())
     assert b"".join(out) == data
+
+
+def test_rm_invalidates_cache(s3):
+    # Issue 761: rm_file does not invalidate cache
+    fn = test_bucket_name + "/2014-01-01.csv"
+    assert s3.exists(fn)
+    assert fn in s3.ls(test_bucket_name)
+    s3.rm(fn)
+    assert not s3.exists(fn)
+    assert fn not in s3.ls(test_bucket_name)
+
+    fn = test_bucket_name + "/2014-01-02.csv"
+    assert s3.exists(fn)
+    assert fn in s3.ls(test_bucket_name)
+    s3.rm_file(fn)
+    assert not s3.exists(fn)
+    assert fn not in s3.ls(test_bucket_name)
