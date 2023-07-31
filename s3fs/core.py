@@ -599,7 +599,7 @@ class S3FileSystem(AsyncFileSystem):
         path,
         mode="rb",
         block_size=None,
-        acl="",
+        acl="private",
         version_id=None,
         fill_cache=None,
         cache_type=None,
@@ -858,7 +858,7 @@ class S3FileSystem(AsyncFileSystem):
 
     find = sync_wrapper(_find)
 
-    async def _mkdir(self, path, acl="", create_parents=True, **kwargs):
+    async def _mkdir(self, path, acl="private", create_parents=True, **kwargs):
         path = self._strip_protocol(path).rstrip("/")
         if not path:
             raise ValueError
@@ -2032,7 +2032,7 @@ class S3File(AbstractBufferedFile):
         path,
         mode="rb",
         block_size=5 * 2**20,
-        acl="",
+        acl="private",
         version_id=None,
         fill_cache=True,
         s3_additional_kwargs=None,
