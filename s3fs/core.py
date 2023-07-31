@@ -452,6 +452,17 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["connect_timeout"] = self.connect_timeout
         if "read_timeout" not in config_kwargs.keys():
             config_kwargs["read_timeout"] = self.read_timeout
+
+        try:
+            from aiohttp.resolver import AsyncResolver
+            async_resolver = AsyncResolver()
+        except (RuntimeError, ImportError):
+            pass
+        else:
+            config_kwargs["connector_args"] = {
+                "resolver": async_resolver
+            }
+
         return config_kwargs
 
     async def set_session(self, refresh=False, kwargs={}):
