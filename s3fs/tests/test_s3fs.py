@@ -2071,9 +2071,13 @@ def test_via_fsspec(s3):
     import fsspec
 
     s3.mkdir("mine")
-    with fsspec.open("mine/oi", "wb") as f:
+    with fsspec.open(
+        "s3://mine/oi", "wb", client_kwargs={"endpoint_url": endpoint_uri}
+    ) as f:
         f.write(b"hello")
-    with fsspec.open("mine/oi", "rb") as f:
+    with fsspec.open(
+        "s3://mine/oi", "rb", client_kwargs={"endpoint_url": endpoint_uri}
+    ) as f:
         assert f.read() == b"hello"
 
 
