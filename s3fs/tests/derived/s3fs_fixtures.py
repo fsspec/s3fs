@@ -61,6 +61,7 @@ class S3fsFixtures(AbstractFixtures):
     def fs_path(self):
         return test_bucket_name
 
+    @pytest.fixture
     def supports_empty_directories(self):
         return False
 
