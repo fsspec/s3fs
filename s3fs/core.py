@@ -969,6 +969,8 @@ class S3FileSystem(AsyncFileSystem):
                     for o in files
                     if o["name"].rstrip("/") == path and o["type"] != "directory"
                 ]
+                if not files:
+                    raise FileNotFoundError(path)
             if detail:
                 return files
         return files if detail else sorted([o["name"] for o in files])

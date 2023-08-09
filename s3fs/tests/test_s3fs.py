@@ -281,7 +281,8 @@ def test_info(s3):
     s3.mkdir(new_parent)
     with pytest.raises(FileNotFoundError):
         s3.info(new_parent)
-    s3.ls(new_parent)
+    with pytest.raises(FileNotFoundError):
+        s3.ls(new_parent)
     with pytest.raises(FileNotFoundError):
         s3.info(new_parent)
 
