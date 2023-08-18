@@ -1048,7 +1048,7 @@ class S3FileSystem(AsyncFileSystem):
             )
         except ClientError as ex:
             raise translate_boto_error(ex)
-        self.invalidate_cache(self._parent(path))
+        self.invalidate_cache(path)
         return write_result
 
     touch = sync_wrapper(_touch)
@@ -1081,9 +1081,11 @@ class S3FileSystem(AsyncFileSystem):
         size = len(data)
         # 5 GB is the limit for an S3 PUT
         if size < min(5 * 2**30, 2 * chunksize):
-            return await self._call_s3(
+            out = await self._call_s3(
                 "put_object", Bucket=bucket, Key=key, Body=data, **kwargs
             )
+            self.invalidate_cache(path)
+            return out
         else:
 
             mpu = await self._call_s3(
@@ -1282,16 +1284,20 @@ class S3FileSystem(AsyncFileSystem):
                     **version_id_kw(version_id),
                     **self.req_kw,
                 )
-                return {
+                info = {
                     "ETag": out.get("ETag", ""),
                     "LastModified": out["LastModified"],
                     "size": out["ContentLength"],
-                    "name": "/".join([bucket, key]),
+                    "Size": out["ContentLength"],
+                    "name": path,
                     "type": "file",
+                    "Key": path,
                     "StorageClass": out.get("StorageClass", "STANDARD"),
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
+                self.dircache[path] = [info]
+                return info
             except FileNotFoundError:
                 pass
             except ClientError as e:

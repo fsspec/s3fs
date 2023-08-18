@@ -265,7 +265,7 @@ def test_info(s3):
     s3.touch(b)
     info = s3.info(a)
     linfo = s3.ls(a, detail=True)[0]
-    assert abs(info.pop("LastModified") - linfo.pop("LastModified")).seconds < 1
+    assert abs(info["LastModified"] - linfo["LastModified"]).seconds < 1
     info.pop("VersionId")
     info.pop("ContentType")
     linfo.pop("Key")
@@ -2203,6 +2203,14 @@ def test_version_sizes(s3):
         with s3.open(path, version_id=version_id) as f:
             with gzip.GzipFile(fileobj=f) as zfp:
                 zfp.read()
+
+
+def test_list_then_pipe_info(s3):
+    path = f"{test_bucket_name}/list_then_pipe_info.txt"
+    s3.touch(path)
+    s3.ls(test_bucket_name)
+    s3.pipe_file(path, b"good morning!")
+    assert s3.size(path) == 13
 
 
 def test_find_no_side_effect(s3):
