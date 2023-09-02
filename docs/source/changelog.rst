@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2023.9.0
+--------
+
+- aiobotocore to 2.5.4
+- better ** support in bulk ops/glob (#769)
+- default ACL to "private" rather than blank (#764)
+- invalidate cache in rm_file (#762)
+- closing client in running loop (#760)
+
 2023.6.0
 --------
 
