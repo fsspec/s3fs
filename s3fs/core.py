@@ -543,7 +543,7 @@ class S3FileSystem(AsyncFileSystem):
         if loop is not None and loop.is_running():
             try:
                 loop = asyncio.get_event_loop()
-                loop.create_task(s3.__aexit__(None, None, None))
+                await loop.create_task(s3.__aexit__(None, None, None))
                 return
             except RuntimeError:
                 pass
