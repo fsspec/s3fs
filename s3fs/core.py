@@ -599,7 +599,7 @@ class S3FileSystem(AsyncFileSystem):
         path,
         mode="rb",
         block_size=None,
-        acl="private",
+        acl=False,
         version_id=None,
         fill_cache=None,
         cache_type=None,
@@ -625,7 +625,8 @@ class S3FileSystem(AsyncFileSystem):
             best support random access. When reading only a few specific chunks
             out of a file, performance may be better if False.
         acl: str
-            Canned ACL to set when writing
+            Canned ACL to set when writing. False sends no parameter and uses the bucket's
+            preset default; otherwise it should be a member of the `key_acls` set.
         version_id : str
             Explicit version of the object to open.  This requires that the s3
             filesystem is version aware and bucket versioning is enabled on the
@@ -650,7 +651,11 @@ class S3FileSystem(AsyncFileSystem):
         if requester_pays is None:
             requester_pays = bool(self.req_kw)
 
-        acl = acl or self.s3_additional_kwargs.get("ACL", "")
+        acl = (
+            acl
+            or self.s3_additional_kwargs.get("ACL", False)
+            or self.s3_additional_kwargs.get("acl", False)
+        )
         kw = self.s3_additional_kwargs.copy()
         kw.update(kwargs)
         if not self.version_aware and version_id:
@@ -858,7 +863,7 @@ class S3FileSystem(AsyncFileSystem):
 
     find = sync_wrapper(_find)
 
-    async def _mkdir(self, path, acl="private", create_parents=True, **kwargs):
+    async def _mkdir(self, path, acl=False, create_parents=True, **kwargs):
         path = self._strip_protocol(path).rstrip("/")
         if not path:
             raise ValueError
@@ -872,7 +877,9 @@ class S3FileSystem(AsyncFileSystem):
             if acl and acl not in buck_acls:
                 raise ValueError("ACL not in %s", buck_acls)
             try:
-                params = {"Bucket": bucket, "ACL": acl}
+                params = {"Bucket": bucket}
+                if acl:
+                    params["ACL"] = acl
                 region_name = kwargs.get("region_name", None) or self.client_kwargs.get(
                     "region_name", None
                 )
@@ -2034,7 +2041,7 @@ class S3File(AbstractBufferedFile):
         path,
         mode="rb",
         block_size=5 * 2**20,
-        acl="private",
+        acl=False,
         version_id=None,
         fill_cache=True,
         s3_additional_kwargs=None,
@@ -2131,12 +2138,13 @@ class S3File(AbstractBufferedFile):
             return
         logger.debug("Initiate upload for %s" % self)
         self.parts = []
-        self.mpu = self._call_s3(
-            "create_multipart_upload",
+        kw = dict(
             Bucket=self.bucket,
             Key=self.key,
-            ACL=self.acl,
         )
+        if self.acl:
+            kw["ACL"] = self.acl
+        self.mpu = self._call_s3("create_multipart_upload", **kw)
 
         if self.append_block:
             # use existing data in key when appending,
@@ -2271,14 +2279,10 @@ class S3File(AbstractBufferedFile):
                 logger.debug("One-shot upload of %s" % self)
                 self.buffer.seek(0)
                 data = self.buffer.read()
-                write_result = self._call_s3(
-                    "put_object",
-                    Key=self.key,
-                    Bucket=self.bucket,
-                    Body=data,
-                    ACL=self.acl,
-                    **self.kwargs,
-                )
+                kw = dict(Key=self.key, Bucket=self.bucket, Body=data, **self.kwargs)
+                if self.acl:
+                    kw["ACL"] = self.acl
+                write_result = self._call_s3("put_object", **kw)
             else:
                 raise RuntimeError
         else:
