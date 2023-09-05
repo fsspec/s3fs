@@ -599,7 +599,7 @@ class S3FileSystem(AsyncFileSystem):
         path,
         mode="rb",
         block_size=None,
-        acl="private",
+        acl=None,
         version_id=None,
         fill_cache=None,
         cache_type=None,
@@ -650,7 +650,7 @@ class S3FileSystem(AsyncFileSystem):
         if requester_pays is None:
             requester_pays = bool(self.req_kw)
 
-        acl = acl or self.s3_additional_kwargs.get("ACL", "")
+        acl = acl or self.s3_additional_kwargs.get("ACL", "private")
         kw = self.s3_additional_kwargs.copy()
         kw.update(kwargs)
         if not self.version_aware and version_id:
@@ -858,7 +858,8 @@ class S3FileSystem(AsyncFileSystem):
 
     find = sync_wrapper(_find)
 
-    async def _mkdir(self, path, acl="private", create_parents=True, **kwargs):
+    async def _mkdir(self, path, acl=None, create_parents=True, **kwargs):
+        acl = acl or self.s3_additional_kwargs.get("ACL", "private")
         path = self._strip_protocol(path).rstrip("/")
         if not path:
             raise ValueError
