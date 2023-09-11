@@ -2362,12 +2362,18 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
 
 
 async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
-    resp = await fs._call_s3(
-        "get_object",
-        Bucket=bucket,
-        Key=key,
-        Range="bytes=%i-%i" % (start, end - 1),
-        **version_id_kw(version_id),
-        **req_kw,
-    )
-    return await resp["Body"].read()
+    async def _call_and_read():
+        resp = await fs._call_s3(
+            "get_object",
+            Bucket=bucket,
+            Key=key,
+            Range="bytes=%i-%i" % (start, end - 1),
+            **version_id_kw(version_id),
+            **req_kw,
+        )
+        try:
+            return await resp["Body"].read()
+        finally:
+            await resp["Body"].close()
+
+    return await _error_wrapper(_call_and_read, retries=fs.retries)
