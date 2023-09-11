@@ -2254,7 +2254,7 @@ class S3File(AbstractBufferedFile):
             )
 
             part_header = {"PartNumber": part, "ETag": out["ETag"]}
-            if out["ChecksumSHA256"]:
+            if "ChecksumSHA256" in out:
                 part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
             self.parts.append(part_header)
 
