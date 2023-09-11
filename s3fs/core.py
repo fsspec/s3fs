@@ -2374,6 +2374,6 @@ async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
         try:
             return await resp["Body"].read()
         finally:
-            await resp["Body"].close()
+            resp["Body"].close()
 
     return await _error_wrapper(_call_and_read, retries=fs.retries)
