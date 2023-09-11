@@ -375,13 +375,15 @@ def test_checksum(s3):
     s3.checksum(path1, refresh=True)
 
 def test_multi_checksum(s3):
-    path = test_bucket_name + "/tmp/checksum"
+    path = test_bucket_name
+    file_key = "/tmp/checksum"
     s3 = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri},
         s3_additional_kwargs={"ChecksumAlgorithm": "SHA256"})
-    with s3.open(path, "wb", blocksize=5 * 2**20, ) as f:
+    with s3.open(path + file_key, "wb", blocksize=5 * 2**20, ) as f:
         f.write(b"0" * (5 * 2**20 + 1)) # starts multipart and puts first part
         f.write(b"data") # any extra data
-    assert s3.cat(path) == b"0" * (5 * 2**20 + 1) + b"data"
+    assert s3.cat(path + file_key) == b"0" * (5 * 2**20 + 1) + b"data"
+    sync(s3.loop, s3.s3.head_object, Bucket=test_bucket_name, Key=file_key, ChecksumMode='ENABLED')
 
 test_xattr_sample_metadata = {"testxattr": "1"}
 
