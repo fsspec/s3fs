@@ -375,6 +375,9 @@ def test_checksum(s3):
     s3.checksum(path1, refresh=True)
 
 def test_multi_checksum(s3):
+    # Moto accepts the request to add checksum, and accepts the checksum mode,
+    # but doesn't actually return the checksum
+    # So, this is mostly a stub test
     file_key = "checksum"
     path = test_bucket_name + "/" + file_key
     s3 = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri},
@@ -383,7 +386,8 @@ def test_multi_checksum(s3):
         f.write(b"0" * (5 * 2**20 + 1)) # starts multipart and puts first part
         f.write(b"data") # any extra data
     assert s3.cat(path) == b"0" * (5 * 2**20 + 1) + b"data"
-    sync(s3.loop, s3.s3.head_object, Bucket=test_bucket_name, Key=file_key, ChecksumMode='ENABLED')
+    FileHead = sync(s3.loop, s3.s3.head_object, Bucket=test_bucket_name, Key=file_key, ChecksumMode='ENABLED')
+    # assert "ChecksumSHA256" in FileHead
 
 test_xattr_sample_metadata = {"testxattr": "1"}
 
