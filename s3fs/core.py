@@ -2150,10 +2150,7 @@ class S3File(AbstractBufferedFile):
                 UploadId=self.mpu["UploadId"],
                 CopySource=self.path,
             )
-            part_header = {"PartNumber": part, "ETag": out["ETag"]}
-            if out["ChecksumSHA256"]:
-                part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
-            self.parts.append(part_header)
+            self.parts.append({"PartNumber": 1, "ETag": out["CopyPartResult"]["ETag"]})
 
     def metadata(self, refresh=False, **kwargs):
         """Return metadata of file.
@@ -2256,7 +2253,10 @@ class S3File(AbstractBufferedFile):
                 Key=key,
             )
 
-            self.parts.append({"PartNumber": part, "ETag": out["ETag"]})
+            part_header = {"PartNumber": part, "ETag": out["ETag"]}
+            if out["ChecksumSHA256"]:
+                part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
+            self.parts.append(part_header)
 
         if self.autocommit and final:
             self.commit()
