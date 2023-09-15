@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2023.9.1
+--------
+
+- retry ClientPayloadError while reading after initial connection (#787)
+- don't pass ACL if not specified (#785)
+
 2023.9.0
 --------
 
