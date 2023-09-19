@@ -851,6 +851,13 @@ class S3FileSystem(AsyncFileSystem):
                         thisdircache[ppar].append(d)
             if par in sdirs:
                 thisdircache[par].append(o)
+
+        # Explicitly add directories to their parents in the dircache
+        for d in dirs:
+            par = self._parent(d["name"])
+            if par in thisdircache:
+                thisdircache[par].append(d)
+
         if not prefix:
             for k, v in thisdircache.items():
                 if k not in self.dircache and len(k) >= len(path):

@@ -2687,3 +2687,28 @@ def test_rm_invalidates_cache(s3):
     s3.rm_file(fn)
     assert not s3.exists(fn)
     assert fn not in s3.ls(test_bucket_name)
+
+
+def test_cache_handles_find_with_maxdepth(s3):
+    # Issue 773: invalidate_cache should not be needed when find is called with different maxdepth
+    base_name = test_bucket_name + "/main"
+    dir = base_name + "/dir1/fileB"
+    file = base_name + "/fileA"
+    s3.touch(dir)
+    s3.touch(file)
+
+    # Find with maxdepth=None
+    f = s3.find(base_name, maxdepth=None, withdirs=False)
+    assert base_name + "/fileA" in f
+    assert base_name + "/dir1" not in f
+    assert base_name + "/dir1/fileB" in f
+
+    # Find with maxdepth=1.
+    # Performed twice with cache invalidated between them which should give same result
+    for _ in range(2):
+        f = s3.find(base_name, maxdepth=1, withdirs=True)
+        assert base_name + "/fileA" in f
+        assert base_name + "/dir1" in f
+        assert base_name + "/dir1/fileB" not in f
+
+        s3.invalidate_cache()
