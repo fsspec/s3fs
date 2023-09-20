@@ -13,6 +13,7 @@ import time
 import sys
 import pytest
 import moto
+from moto.moto_server.threaded_moto_server import ThreadedMotoServer
 from itertools import chain
 import fsspec.core
 from dateutil.tz import tzutc
@@ -67,47 +68,29 @@ port = 5555
 endpoint_uri = "http://127.0.0.1:%s/" % port
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def s3_base():
     # writable local S3 system
-    import shlex
-    import subprocess
 
-    try:
-        # should fail since we didn't start server yet
-        r = requests.get(endpoint_uri)
-    except:
-        pass
-    else:
-        if r.ok:
-            raise RuntimeError("moto server already up")
+    # This fixture is module-scoped, meaning that we can re-use the MotoServer across all tests
+    server = ThreadedMotoServer(ip_address="127.0.0.1", port=port)
+    server.start()
     if "AWS_SECRET_ACCESS_KEY" not in os.environ:
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foo"
     if "AWS_ACCESS_KEY_ID" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = "foo"
-    proc = subprocess.Popen(
-        shlex.split("moto_server s3 -p %s" % port),
-        stderr=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-    )
 
-    timeout = 5
-    while timeout > 0:
-        try:
-            print("polling for moto server")
-            r = requests.get(endpoint_uri)
-            if r.ok:
-                break
-        except:
-            pass
-        timeout -= 0.1
-        time.sleep(0.1)
     print("server up")
     yield
     print("moto done")
-    proc.terminate()
-    proc.wait()
+    server.stop()
+
+
+@pytest.fixture(autouse=True)
+def reset_s3_fixture():
+    # We reuse the MotoServer for all tests
+    # But we do want a clean state for every test
+    requests.post(f"{endpoint_uri}/moto-api/reset")
 
 
 def get_boto3_client():
