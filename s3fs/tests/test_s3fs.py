@@ -166,6 +166,18 @@ def test_simple(s3):
         assert out == data
 
 
+def test_with_size(s3):
+    data = b"a" * (10 * 2**20)
+
+    with s3.open(a, "wb") as f:
+        f.write(data)
+
+    with s3.open(a, "rb", size=100) as f:
+        assert f.size == 100
+        out = f.read()
+        assert len(out) == 100
+
+
 @pytest.mark.parametrize("default_cache_type", ["none", "bytes", "mmap", "readahead"])
 def test_default_cache_type(s3, default_cache_type):
     data = b"a" * (10 * 2**20)
