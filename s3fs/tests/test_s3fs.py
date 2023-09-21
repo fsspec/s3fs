@@ -621,6 +621,22 @@ def test_rmdir(s3):
     s3.rmdir(bucket)
     assert bucket not in s3.ls("/")
 
+    # Issue 689, s3fs rmdir command returns error when given a valid s3 path.
+    dir = test_bucket_name + "/dir"
+
+    assert not s3.exists(dir)
+    with pytest.raises(FileNotFoundError):
+        s3.rmdir(dir)
+
+    s3.touch(dir + "/file")
+    assert s3.exists(dir)
+    assert s3.exists(dir + "/file")
+    with pytest.raises(FileExistsError):
+        s3.rmdir(dir)
+
+    with pytest.raises(OSError):
+        s3.rmdir(test_bucket_name)
+
 
 def test_mkdir(s3):
     bucket = "test1_bucket"

@@ -919,6 +919,13 @@ class S3FileSystem(AsyncFileSystem):
     makedirs = sync_wrapper(_makedirs)
 
     async def _rmdir(self, path):
+        bucket, key, _ = self.split_path(path)
+        if key:
+            if await self._exists(path):
+                # User may have meant rm(path, recursive=True)
+                raise FileExistsError
+            raise FileNotFoundError
+
         try:
             await self._call_s3("delete_bucket", Bucket=path)
         except botocore.exceptions.ClientError as e:
