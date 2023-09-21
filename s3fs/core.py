@@ -604,6 +604,7 @@ class S3FileSystem(AsyncFileSystem):
         fill_cache=None,
         cache_type=None,
         autocommit=True,
+        size=None,
         requester_pays=None,
         cache_options=None,
         **kwargs,
@@ -680,6 +681,7 @@ class S3FileSystem(AsyncFileSystem):
             autocommit=autocommit,
             requester_pays=requester_pays,
             cache_options=cache_options,
+            size=size,
         )
 
     async def _lsdir(
@@ -2056,6 +2058,7 @@ class S3File(AbstractBufferedFile):
         cache_type="readahead",
         requester_pays=False,
         cache_options=None,
+        size=None,
     ):
         bucket, key, path_version_id = s3.split_path(path)
         if not key:
@@ -2094,6 +2097,7 @@ class S3File(AbstractBufferedFile):
             autocommit=autocommit,
             cache_type=cache_type,
             cache_options=cache_options,
+            size=size,
         )
         self.s3 = self.fs  # compatibility
 
@@ -2133,7 +2137,7 @@ class S3File(AbstractBufferedFile):
             # Reflect head
             self.s3_additional_kwargs.update(head)
 
-        if "r" in mode and "ETag" in self.details:
+        if "r" in mode and size is None and "ETag" in self.details:
             self.req_kw["IfMatch"] = self.details["ETag"]
 
     def _call_s3(self, method, *kwarglist, **kwargs):
