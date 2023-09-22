@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2023.9.2
+--------
+
+- allow size= in fs.open() (#797)
+- rmdir for non-bucket (#975)
+- moto updates (#973)
+- fix CI warnings (#792)
+- dircache usage with depth (#791)
+
 2023.9.1
 --------
 
