@@ -783,6 +783,12 @@ def test_du(s3):
     )
     assert s3.du(test_bucket_name) == s3.du("s3://" + test_bucket_name)
 
+    # Issue 450, s3.du of non-existent directory
+    dir = test_bucket_name + "/does-not-exist"
+    assert not s3.exists(dir)
+    assert s3.du(dir) == 0
+    assert s3.du(dir + "/") == 0
+
 
 def test_s3_ls(s3):
     fn = test_bucket_name + "/nested/file1"
