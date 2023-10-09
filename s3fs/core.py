@@ -1217,7 +1217,7 @@ class S3FileSystem(AsyncFileSystem):
                 Bucket=bucket,
                 Key=key,
                 **version_id_kw(version_id or vers),
-                **self.req_kw,
+                **kw,
             )
             return resp["Body"], resp.get("ContentLength", None)
 
@@ -1248,10 +1248,10 @@ class S3FileSystem(AsyncFileSystem):
                         # in a failure.
                         # Examples:
                         # Read 1 byte -> failure, retry with read_range=0, byte range should be 0-
-                        # Read 1 byte, success. Read 1 byte: failure. Retry with read_range=2, byte-range should be 2-
-                        # Read 1 bytes, success. Read 1 bytes: success. Read 1 byte, failure. Retry with read_range=3,
-                        # byte-range should be 3-.
-                        body, _ = await _open_file(bytes_read + 1)
+                        # Read 1 byte, success. Read 1 byte: failure. Retry with read_range=1, byte-range should be 1-
+                        # Read 1 bytes, success. Read 1 bytes: success. Read 1 byte, failure. Retry with read_range=2,
+                        # byte-range should be 2-.
+                        body, _ = await _open_file(bytes_read)
                         continue
 
                     if not chunk:
