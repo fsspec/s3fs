@@ -257,7 +257,7 @@ class S3FileSystem(AsyncFileSystem):
     retries = 5
     read_timeout = 15
     default_block_size = 5 * 2**20
-    protocol = ["s3", "s3a"]
+    protocol = ("s3", "s3a")
     _extra_tokenize_attributes = ("default_block_size",)
 
     def __init__(
