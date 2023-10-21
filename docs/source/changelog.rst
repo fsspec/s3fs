@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2023.10.0
+---------
+
+- make protocol attribute a tuple (#812)
+- update to aiobotocore 2.7.0 (#809)
+- fix in _get_file following failure after connect (#805)
+- test for du of nonexistent (#803)
+
 2023.9.2
 --------
 
