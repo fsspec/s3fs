@@ -1981,7 +1981,7 @@ class S3FileSystem(AsyncFileSystem):
         if "LastModified" not in info:
             # This path is a bucket or folder, which do not currently have a modified date
             raise IsADirectoryError
-        return info["LastModified"].replace(tzinfo=None)
+        return info["LastModified"]
 
     def sign(self, path, expiration=100, **kwargs):
         return self.url(path, expires=expiration, **kwargs)

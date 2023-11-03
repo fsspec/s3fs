@@ -2033,6 +2033,7 @@ def test_modified(s3):
     s3.touch(file_path)
     modified = s3.modified(path=file_path)
     assert isinstance(modified, datetime.datetime)
+    assert modified.tzinfo is not None
 
     # Test directory
     with pytest.raises(IsADirectoryError):
