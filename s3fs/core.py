@@ -718,7 +718,7 @@ class S3FileSystem(AsyncFileSystem):
             except ClientError as e:
                 raise translate_boto_error(e)
 
-            if delimiter and files and not versions:
+            if delimiter and not versions:
                 self.dircache[path] = files
             return files
         return self.dircache[path]
@@ -1001,13 +1001,18 @@ class S3FileSystem(AsyncFileSystem):
     def _exists_in_cache(self, path, bucket, key, version_id):
         fullpath = "/".join((bucket, key))
 
+        entries = None
         try:
             entries = self._ls_from_cache(fullpath)
         except FileNotFoundError:
-            return False
+            pass
 
         if entries is None:
-            return None
+            children = [key for key in self.dircache.keys() if key.startswith(fullpath)]
+            if len(children) == 0:
+                return None
+            else:
+                return True  # if children exist, the parent also exists
 
         if not self.version_aware or version_id is None:
             return True
@@ -1036,27 +1041,22 @@ class S3FileSystem(AsyncFileSystem):
                 return True
             except FileNotFoundError:
                 return False
-        elif self.dircache.get(bucket, False):
-            return True
         else:
-            try:
-                if self._ls_from_cache(bucket):
+            if self._exists_in_cache(path, bucket, key, version_id):
+                return True
+            else:
+                try:
+                    await self._call_s3(
+                        "list_objects_v2", MaxKeys=1, Bucket=bucket, **self.req_kw
+                    )
                     return True
-            except FileNotFoundError:
-                # might still be a bucket we can access but don't own
-                pass
-            try:
-                await self._call_s3(
-                    "list_objects_v2", MaxKeys=1, Bucket=bucket, **self.req_kw
-                )
-                return True
-            except Exception:
-                pass
-            try:
-                await self._call_s3("get_bucket_location", Bucket=bucket, **self.req_kw)
-                return True
-            except Exception:
-                return False
+                except Exception:
+                    pass
+                try:
+                    await self._call_s3("get_bucket_location", Bucket=bucket, **self.req_kw)
+                    return True
+                except Exception:
+                    return False
 
     exists = sync_wrapper(_exists)
 
