@@ -30,6 +30,7 @@ import aiobotocore.session
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError, HTTPClientError, ParamValidationError
 from botocore.parsers import ResponseParserError
+from botocore.credentials import create_credential_resolver
 
 from s3fs.errors import translate_boto_error
 from s3fs.utils import S3BucketRegionCache, ParamKwargsHelper, _get_brange, FileExpired
@@ -137,6 +138,12 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
         except Exception as e:
             err = e
     err = translate_boto_error(err)
+
+    s3 = func.__self__
+    if isinstance(err, PermissionError) and s3._client_config.signature_version == botocore.UNSIGNED:
+        print("""No credentials were given and thus anonymous access was tried and failed. Please provide
+              credentials.""")
+
     raise err
 
 
@@ -464,6 +471,19 @@ class S3FileSystem(AsyncFileSystem):
             return self._s3
         logger.debug("Setting up s3fs instance")
 
+        if self.session is None:
+            self.session = aiobotocore.session.AioSession(**self.kwargs)
+
+        cred_resolver = create_credential_resolver(self.session, region_name=self.session._last_client_region_used)
+        credentials = cred_resolver.load_credentials()
+
+        if credentials is None and self.key is None and self.secret is None and self.token is None and not self.anon:
+            self.anon = True
+        else:
+            self.key = credentials.access_key
+            self.secret = credentials.secret_key
+            self.token = credentials.token
+
         client_kwargs = self.client_kwargs.copy()
         init_kwargs = dict(
             aws_access_key_id=self.key,
@@ -479,6 +499,7 @@ class S3FileSystem(AsyncFileSystem):
         if "use_ssl" not in client_kwargs.keys():
             init_kwargs["use_ssl"] = self.use_ssl
         config_kwargs = self._prepare_config_kwargs()
+
         if self.anon:
             from botocore import UNSIGNED
 
@@ -498,8 +519,6 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["signature_version"] = UNSIGNED
 
         conf = AioConfig(**config_kwargs)
-        if self.session is None:
-            self.session = aiobotocore.session.AioSession(**self.kwargs)
 
         for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
             for option in ("region_name", "endpoint_url"):
