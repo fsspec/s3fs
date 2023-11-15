@@ -1943,6 +1943,17 @@ class S3FileSystem(AsyncFileSystem):
 
     is_bucket_versioned = sync_wrapper(_is_bucket_versioned)
 
+    async def _make_bucket_versioned(self, bucket, versioned: bool = True):
+        """Set bucket versioning status"""
+        status = "Enabled" if versioned else "Suspended"
+        return await self._call_s3(
+            "put_bucket_versioning",
+            Bucket=bucket,
+            VersioningConfiguration={"Status": status},
+        )
+
+    make_bucket_versioned = sync_wrapper(_make_bucket_versioned)
+
     async def _rm_versioned_bucket_contents(self, bucket):
         """Remove a versioned bucket and all contents"""
         await self.set_session()
@@ -2294,7 +2305,7 @@ class S3File(AbstractBufferedFile):
             if self.buffer is not None:
                 logger.debug("Empty file committed %s" % self)
                 self._abort_mpu()
-                write_result = self.fs.touch(self.path)
+                write_result = self.fs.touch(self.path, **self.kwargs)
         elif not self.parts:
             if self.buffer is not None:
                 logger.debug("One-shot upload of %s" % self)

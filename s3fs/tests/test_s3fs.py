@@ -2729,3 +2729,12 @@ def test_cache_handles_find_with_maxdepth(s3):
         assert base_name + "/dir1/fileB" not in f
 
         s3.invalidate_cache()
+
+
+def test_bucket_versioning(s3):
+    s3.mkdir("maybe_versioned")
+    assert not s3.is_bucket_versioned("maybe_versioned")
+    s3.make_bucket_versioned("maybe_versioned")
+    assert s3.is_bucket_versioned("maybe_versioned")
+    s3.make_bucket_versioned("maybe_versioned", False)
+    assert not s3.is_bucket_versioned("maybe_versioned")
