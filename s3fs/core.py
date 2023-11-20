@@ -474,10 +474,13 @@ class S3FileSystem(AsyncFileSystem):
         if self.session is None:
             self.session = aiobotocore.session.AioSession(**self.kwargs)
 
+        # creating credentials resolver which enables loading credentials from configs/environment variables see
+        # https://github.com/boto/botocore/blob/develop/botocore/credentials.py#L2043
         cred_resolver = create_credential_resolver(self.session, region_name=self.session._last_client_region_used)
         credentials = cred_resolver.load_credentials()
 
         if credentials is None and self.key is None and self.secret is None and self.token is None and not self.anon:
+            logger.debug("No credentials given/found, setting `anon` to True.")
             self.anon = True
         else:
             self.key = credentials.access_key
