@@ -140,9 +140,14 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
     err = translate_boto_error(err)
 
     s3 = func.__self__
-    if isinstance(err, PermissionError) and s3._client_config.signature_version == botocore.UNSIGNED:
-        print("""No credentials were given and thus anonymous access was tried and failed. Please provide
-              credentials.""")
+    if (
+        isinstance(err, PermissionError)
+        and s3._client_config.signature_version == botocore.UNSIGNED
+    ):
+        print(
+            """No credentials were given and thus anonymous access was tried and failed. Please provide
+              credentials."""
+        )
 
     raise err
 
@@ -474,18 +479,28 @@ class S3FileSystem(AsyncFileSystem):
         if self.session is None:
             self.session = aiobotocore.session.AioSession(**self.kwargs)
 
-        # creating credentials resolver which enables loading credentials from configs/environment variables see
-        # https://github.com/boto/botocore/blob/develop/botocore/credentials.py#L2043
-        cred_resolver = create_credential_resolver(self.session, region_name=self.session._last_client_region_used)
-        credentials = cred_resolver.load_credentials()
+        if (
+            self.key is None
+            and self.secret is None
+            and self.token is None
+            and not self.anon
+        ):
+            # creating credentials resolver which enables loading credentials from configs/environment variables see
+            # https://github.com/boto/botocore/blob/develop/botocore/credentials.py#L2043
+            # tests whether any creds are available at all; if not, default to anonymous
+            cred_resolver = create_credential_resolver(
+                self.session, region_name=self.session._last_client_region_used
+            )
+            credentials = cred_resolver.load_credentials()
 
-        if credentials is None and self.key is None and self.secret is None and self.token is None and not self.anon:
-            logger.debug("No credentials given/found, setting `anon` to True.")
-            self.anon = True
-        else:
-            self.key = credentials.access_key
-            self.secret = credentials.secret_key
-            self.token = credentials.token
+            if credentials is None:
+                logger.debug("No credentials given/found, setting `anon` to True.")
+                self.anon = True
+            else:
+                # by stashing these, we avoid doing the lookup again
+                self.key = credentials.access_key
+                self.secret = credentials.secret_key
+                self.token = credentials.token
 
         client_kwargs = self.client_kwargs.copy()
         init_kwargs = dict(
