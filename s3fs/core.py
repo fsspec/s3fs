@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import errno
+import inspect
 import logging
 import mimetypes
 import os
@@ -139,15 +140,16 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
             err = e
     err = translate_boto_error(err)
 
-    s3 = func.__self__
-    if (
-        isinstance(err, PermissionError)
-        and s3._client_config.signature_version == botocore.UNSIGNED
-    ):
-        print(
-            """No credentials were given and thus anonymous access was tried and failed. Please provide
-              credentials."""
-        )
+    if inspect.ismethod(func):
+        s3 = func.__self__
+        try:
+            is_anon = s3._client_config.signature_version == botocore.UNSIGNED
+        except AttributeError:
+            is_anon = False
+        if isinstance(err, PermissionError) and is_anon:
+            raise PermissionError(
+                "Access failed in anonymous mode. You may need to provide credentials."
+            ) from err
 
     raise err
 
@@ -479,11 +481,15 @@ class S3FileSystem(AsyncFileSystem):
         if self.session is None:
             self.session = aiobotocore.session.AioSession(**self.kwargs)
 
+        drop_keys = {
+            "aws_access_key_id",
+            "aws_secret_access_key",
+            "aws_session_token",
+        }
         if (
-            self.key is None
-            and self.secret is None
-            and self.token is None
-            and not self.anon
+            not self.anon
+            and (self.key or self.secret or self.token) is None
+            and not drop_keys.intersection(set(self.client_kwargs))
         ):
             # creating credentials resolver which enables loading credentials from configs/environment variables see
             # https://github.com/boto/botocore/blob/develop/botocore/credentials.py#L2043
@@ -521,11 +527,6 @@ class S3FileSystem(AsyncFileSystem):
         if self.anon:
             from botocore import UNSIGNED
 
-            drop_keys = {
-                "aws_access_key_id",
-                "aws_secret_access_key",
-                "aws_session_token",
-            }
             init_kwargs = {
                 key: value for key, value in init_kwargs.items() if key not in drop_keys
             }

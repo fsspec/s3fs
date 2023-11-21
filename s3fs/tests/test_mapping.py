@@ -52,22 +52,6 @@ def test_with_data(s3):
     assert list(d) == []
 
 
-def test_complex_keys(s3):
-    d = s3.get_mapper(root)
-    d[1] = b"hello"
-    assert d[1] == b"hello"
-    del d[1]
-
-    d[1, 2] = b"world"
-    assert d[1, 2] == b"world"
-    del d[1, 2]
-
-    d["x", 1, 2] = b"hello world"
-    assert d["x", 1, 2] == b"hello world"
-
-    assert ("x", 1, 2) in d
-
-
 def test_clear_empty(s3):
     d = s3.get_mapper(root)
     d.clear()

@@ -1,7 +1,6 @@
 import errno
 import logging
 from contextlib import contextmanager, AsyncExitStack
-from botocore.exceptions import ClientError
 
 
 logger = logging.getLogger("s3fs")
@@ -31,26 +30,13 @@ class S3BucketRegionCache:
         if bucket_name in self._buckets:
             return self._buckets[bucket_name]
 
-        general_client = await self.get_client()
         if bucket_name is None:
-            return general_client
+            # general client
+            return await self.get_client()
 
-        try:
-            response = await general_client.head_bucket(Bucket=bucket_name)
-        except ClientError as e:
-            region = (
-                e.response["ResponseMetadata"]
-                .get("HTTPHeaders", {})
-                .get("x-amz-bucket-region")
-            )
-            if not region:
-                logger.debug(
-                    "RC: HEAD_BUCKET call for %r has failed, returning the general client",
-                    bucket_name,
-                )
-                return general_client
-        else:
-            region = response["ResponseMetadata"]["HTTPHeaders"]["x-amz-bucket-region"]
+        region = get_bucket_region(
+            bucket_name
+        )  # this is sync - matters? can reuse some aiohttp session?
 
         if region not in self._regions:
             logger.debug(
@@ -68,6 +54,7 @@ class S3BucketRegionCache:
         return client
 
     async def get_client(self):
+        # general, non-regional client
         if not self._client:
             self._client = await self._stack.enter_async_context(
                 self._session.create_client("s3", **self._client_kwargs)
@@ -86,6 +73,15 @@ class S3BucketRegionCache:
 
     async def __aexit__(self, *exc_args):
         await self.clear()
+
+
+def get_bucket_region(bucket):
+    """Simple way to locate bucket"""
+    import requests
+
+    return requests.head(f"https://s3.amazonaws.com/{bucket}").headers[
+        "x-amz-bucket-region"
+    ]
 
 
 class FileExpired(IOError):
