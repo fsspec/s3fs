@@ -1309,7 +1309,7 @@ class S3FileSystem(AsyncFileSystem):
                 )
                 return {
                     "ETag": out.get("ETag", ""),
-                    "LastModified": out["LastModified"],
+                    "LastModified": out("LastModified", ""),
                     "size": out["ContentLength"],
                     "name": "/".join([bucket, key]),
                     "type": "file",
