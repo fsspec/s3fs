@@ -167,9 +167,9 @@ def test_simple(s3):
 
 
 def test_auto_anon(s3, monkeypatch):
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID")
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY")
-    monkeypatch.delenv("AWS_SESSION_TOKEN")
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
 
     fs = S3FileSystem(skip_instance_cache=True, endpoint_url=endpoint_uri)
     fs.s3
