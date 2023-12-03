@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2023.12.0
+---------
+
+- fall back to anon if no creds are found or passed at all (#823)
+- **relax version bounds for aiobotocore** (#829)
+- avoid key error if LastModified missing (#828)
+- add make_mucket_versioned method (#825)
+- retain TZ on modified time (#818)
+
 2023.10.0
 ---------
 
