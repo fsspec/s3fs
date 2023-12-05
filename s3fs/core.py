@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import errno
-import inspect
 import logging
 import mimetypes
 import os
@@ -31,7 +30,6 @@ import aiobotocore.session
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError, HTTPClientError, ParamValidationError
 from botocore.parsers import ResponseParserError
-from botocore.credentials import create_credential_resolver
 
 from s3fs.errors import translate_boto_error
 from s3fs.utils import S3BucketRegionCache, ParamKwargsHelper, _get_brange, FileExpired
@@ -139,18 +137,6 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
         except Exception as e:
             err = e
     err = translate_boto_error(err)
-
-    if inspect.ismethod(func):
-        s3 = func.__self__
-        try:
-            is_anon = s3._client_config.signature_version == botocore.UNSIGNED
-        except AttributeError:
-            is_anon = False
-        if isinstance(err, PermissionError) and is_anon:
-            raise PermissionError(
-                "Access failed in anonymous mode. You may need to provide credentials."
-            ) from err
-
     raise err
 
 
@@ -478,36 +464,6 @@ class S3FileSystem(AsyncFileSystem):
             return self._s3
         logger.debug("Setting up s3fs instance")
 
-        if self.session is None:
-            self.session = aiobotocore.session.AioSession(**self.kwargs)
-
-        drop_keys = {
-            "aws_access_key_id",
-            "aws_secret_access_key",
-            "aws_session_token",
-        }
-        if (
-            not self.anon
-            and (self.key or self.secret or self.token) is None
-            and not drop_keys.intersection(set(self.client_kwargs))
-        ):
-            # creating credentials resolver which enables loading credentials from configs/environment variables see
-            # https://github.com/boto/botocore/blob/develop/botocore/credentials.py#L2043
-            # tests whether any creds are available at all; if not, default to anonymous
-            cred_resolver = create_credential_resolver(
-                self.session, region_name=self.session._last_client_region_used
-            )
-            credentials = cred_resolver.load_credentials()
-
-            if credentials is None:
-                logger.debug("No credentials given/found, setting `anon` to True.")
-                self.anon = True
-            else:
-                # by stashing these, we avoid doing the lookup again
-                self.key = credentials.access_key
-                self.secret = credentials.secret_key
-                self.token = credentials.token
-
         client_kwargs = self.client_kwargs.copy()
         init_kwargs = dict(
             aws_access_key_id=self.key,
@@ -523,10 +479,14 @@ class S3FileSystem(AsyncFileSystem):
         if "use_ssl" not in client_kwargs.keys():
             init_kwargs["use_ssl"] = self.use_ssl
         config_kwargs = self._prepare_config_kwargs()
-
         if self.anon:
             from botocore import UNSIGNED
 
+            drop_keys = {
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "aws_session_token",
+            }
             init_kwargs = {
                 key: value for key, value in init_kwargs.items() if key not in drop_keys
             }
@@ -538,6 +498,8 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["signature_version"] = UNSIGNED
 
         conf = AioConfig(**config_kwargs)
+        if self.session is None:
+            self.session = aiobotocore.session.AioSession(**self.kwargs)
 
         for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
             for option in ("region_name", "endpoint_url"):

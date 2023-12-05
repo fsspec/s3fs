@@ -166,16 +166,6 @@ def test_simple(s3):
         assert out == data
 
 
-def test_auto_anon(s3, monkeypatch):
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
-    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
-
-    fs = S3FileSystem(skip_instance_cache=True, endpoint_url=endpoint_uri)
-    fs.s3
-    assert fs.anon
-
-
 def test_with_size(s3):
     data = b"a" * (10 * 2**20)
 
