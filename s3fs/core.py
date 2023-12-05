@@ -504,9 +504,9 @@ class S3FileSystem(AsyncFileSystem):
                 self.anon = True
             else:
                 # by stashing these, we avoid doing the lookup again
-                self.key = getattr(credentials, "access_key", None)
-                self.secret = getattr(credentials, "secret_key", None)
-                self.token = getattr(credentials, "token", None)
+                self.key = credentials.access_key
+                self.secret = credentials.secret_key
+                self.token = credentials.token
 
         client_kwargs = self.client_kwargs.copy()
         init_kwargs = dict(
