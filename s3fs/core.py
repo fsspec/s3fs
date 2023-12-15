@@ -1293,7 +1293,7 @@ class S3FileSystem(AsyncFileSystem):
                     if out:
                         return out[0]
                 else:
-                    out = [o for o in out if o["name"] == path]
+                    out = [o for o in out if o["name"] == fullpath]
                     if out:
                         return out[0]
                     return {"name": path, "size": 0, "type": "directory"}
