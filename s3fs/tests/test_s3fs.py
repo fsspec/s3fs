@@ -271,7 +271,7 @@ def test_info(s3):
     s3.ls(parent)  # fill the cache with parent dir
     assert s3.info(a) == s3.dircache[parent][0]  # correct value
     assert id(s3.info(a)) == id(s3.dircache[parent][0])  # is object from cache
-    assert id(s3.info(f'/{a}')) == id(s3.dircache[parent][0])  # is object from cache
+    assert id(s3.info(f"/{a}")) == id(s3.dircache[parent][0])  # is object from cache
 
     new_parent = test_bucket_name + "/foo"
     s3.mkdir(new_parent)
