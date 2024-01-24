@@ -784,7 +784,9 @@ class S3FileSystem(AsyncFileSystem):
             raise ValueError("Cannot traverse all of S3")
         return await super()._glob(path, **kwargs)
 
-    async def _find(self, path, maxdepth=None, withdirs=None, detail=False, prefix=""):
+    async def _find(
+        self, path, maxdepth=None, withdirs=None, detail=False, prefix="", **kwargs
+    ):
         """List all files below path.
         Like posix ``find`` command without conditions
 
@@ -811,7 +813,11 @@ class S3FileSystem(AsyncFileSystem):
             )
         if maxdepth:
             return await super()._find(
-                bucket + "/" + key, maxdepth=maxdepth, withdirs=withdirs, detail=detail
+                bucket + "/" + key,
+                maxdepth=maxdepth,
+                withdirs=withdirs,
+                detail=detail,
+                **kwargs,
             )
         # TODO: implement find from dircache, if all listings are present
         # if refresh is False:
@@ -822,7 +828,7 @@ class S3FileSystem(AsyncFileSystem):
         #     elif len(out) == 0:
         #         return super().find(path)
         #     # else: we refresh anyway, having at least two missing trees
-        out = await self._lsdir(path, delimiter="", prefix=prefix)
+        out = await self._lsdir(path, delimiter="", prefix=prefix, **kwargs)
         if not out and key:
             try:
                 out = [await self._info(path)]
