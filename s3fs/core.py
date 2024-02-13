@@ -1153,7 +1153,7 @@ class S3FileSystem(AsyncFileSystem):
         callback.set_size(size)
 
         if "ContentType" not in kwargs:
-            content_type, _ = mimetypes.guess_type(lpath)
+            content_type, _ = mimetypes.guess_type(rpath)
             if content_type is not None:
                 kwargs["ContentType"] = content_type
 
