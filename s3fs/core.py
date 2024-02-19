@@ -235,12 +235,14 @@ class S3FileSystem(AsyncFileSystem):
     session : aiobotocore AioSession object to be used for all connections.
          This session will be used inplace of creating a new session inside S3FileSystem.
          For example: aiobotocore.session.AioSession(profile='test_user')
-    max_concurrency : int (None)
-        If given, the maximum number of concurrent transfers to use for a
-        multipart upload. Defaults to 1 (multipart uploads will be done sequentially).
-        Note that when used in conjunction with ``S3FileSystem.put(batch_size=...)``
-        the result will be a maximum of ``max_concurrency * batch_size`` concurrent
-        transfers.
+    max_concurrency : int (1)
+        The maximum number of concurrent transfers to use per file for multipart
+        upload (``put()``) operations. Defaults to 1 (sequential). When used in
+        conjunction with ``S3FileSystem.put(batch_size=...)`` the maximum number of
+        simultaneous connections is ``max_concurrency * batch_size``. We may extend
+        this parameter to affect ``pipe()``, ``cat()`` and ``get()``. Increasing this
+        value will result in higher memory usage during multipart upload operations (by
+        ``max_concurrency * chunksize`` bytes per file).
 
     The following parameters are passed on to fsspec:
 
@@ -288,7 +290,7 @@ class S3FileSystem(AsyncFileSystem):
         cache_regions=False,
         asynchronous=False,
         loop=None,
-        max_concurrency=None,
+        max_concurrency=1,
         **kwargs,
     ):
         if key and username:
@@ -326,6 +328,8 @@ class S3FileSystem(AsyncFileSystem):
         self.cache_regions = cache_regions
         self._s3 = None
         self.session = session
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
         self.max_concurrency = max_concurrency
 
     @property
@@ -1183,7 +1187,7 @@ class S3FileSystem(AsyncFileSystem):
                 mpu = await self._call_s3(
                     "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
                 )
-                out = await self._upload_part_concurrent(
+                out = await self._upload_file_part_concurrent(
                     bucket,
                     key,
                     mpu,
@@ -1206,7 +1210,7 @@ class S3FileSystem(AsyncFileSystem):
             self.invalidate_cache(rpath)
             rpath = self._parent(rpath)
 
-    async def _upload_part_concurrent(
+    async def _upload_file_part_concurrent(
         self,
         bucket,
         key,
@@ -1217,8 +1221,8 @@ class S3FileSystem(AsyncFileSystem):
         max_concurrency=None,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
-        if max_concurrency is None or max_concurrency < 1:
-            max_concurrency = 1
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
 
         async def _upload_chunk(chunk, part_number):
             result = await self._call_s3(
