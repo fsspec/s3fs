@@ -120,6 +120,10 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
             err = e
             if "SlowDown" in str(e):
                 await asyncio.sleep(min(1.7**i * 0.1, 15))
+            elif "XAmzContentSHA256Mismatch" in str(e):
+                await asyncio.sleep(min(1.7**i * 0.1, 15))
+            elif "Bad Request" in str(e):
+                await asyncio.sleep(min(1.7**i * 0.1, 15))
             else:
                 break
         except Exception as e:
