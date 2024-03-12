@@ -1129,6 +1129,7 @@ class S3FileSystem(AsyncFileSystem):
                 "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
             )
 
+            # TODO: cancel MPU if the following fails
             out = [
                 await self._call_s3(
                     "upload_part",
@@ -1441,7 +1442,7 @@ class S3FileSystem(AsyncFileSystem):
         path = self._strip_protocol(path).strip("/")
         # Send buckets to super
         if "/" not in path:
-            if path in await self._lsbuckets(path):
+            if path == "":
                 return True
             try:
                 out = await self._lsdir(path)
