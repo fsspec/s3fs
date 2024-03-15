@@ -996,9 +996,12 @@ class S3FileSystem(AsyncFileSystem):
         else:
             files = await self._lsdir(path, refresh, versions=versions)
             if not files and "/" in path:
-                files = await self._lsdir(
-                    self._parent(path), refresh=refresh, versions=versions
-                )
+                try:
+                    files = await self._lsdir(
+                        self._parent(path), refresh=refresh, versions=versions
+                    )
+                except IOError:
+                    pass
                 files = [
                     o
                     for o in files
