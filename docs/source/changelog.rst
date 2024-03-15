@@ -1,10 +1,18 @@
 Changelog
 =========
 
+2024.3.0
+--------
+
+- don't fail ls is parent is unaccessible (#860)
+- allow checksum error to retry (#858)
+- don't lsbuckets for isdir(bucket) (#856)
+- concurrent uplads of parts in put_file (#848)
+
 2024.2.0
 --------
 
-- fixe cache lookup in _info (#840)
+- fix cache lookup in _info (#840)
 
 2023.12.2
 ---------
