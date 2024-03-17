@@ -991,6 +991,15 @@ def test_get_file_with_callback(s3, tmpdir):
     assert cb.value == cb.size
 
 
+def test_get_file_with_kwargs(s3, tmpdir):
+    test_file = str(tmpdir.join("test.json"))
+
+    get_file_kwargs = {"max_concurency": 1, "random_kwarg": "value"}
+    s3.get_file(
+        test_bucket_name + "/test/accounts.1.json", test_file, **get_file_kwargs
+    )
+
+
 @pytest.mark.parametrize("size", [2**10, 10 * 2**20])
 def test_put_file_with_callback(s3, tmpdir, size):
     test_file = str(tmpdir.join("test.json"))

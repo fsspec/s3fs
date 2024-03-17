@@ -1271,7 +1271,7 @@ class S3FileSystem(AsyncFileSystem):
         return out
 
     async def _get_file(
-        self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None
+        self, rpath, lpath, callback=_DEFAULT_CALLBACK, version_id=None, **kwargs
     ):
         if os.path.isdir(lpath):
             return
