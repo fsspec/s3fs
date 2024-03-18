@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2024.3.1
+--------
+
+- accept kwargs in get_file (#863)
+
 2024.3.0
 --------
 
