@@ -118,10 +118,13 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
         except ClientError as e:
             logger.debug("Client error (maybe retryable): %s", e)
             err = e
+            wait_time = asyncio.sleep(min(1.7**i * 0.1, 15))
             if "SlowDown" in str(e):
-                await asyncio.sleep(min(1.7**i * 0.1, 15))
+                await wait_time
+            elif "reduce your request rate" in str(e):
+                await wait_time
             elif "XAmzContentSHA256Mismatch" in str(e):
-                await asyncio.sleep(min(1.7**i * 0.1, 15))
+                await wait_time
             else:
                 break
         except Exception as e:
