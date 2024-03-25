@@ -1954,7 +1954,7 @@ class S3FileSystem(AsyncFileSystem):
             Must have 0 < len <= 1000
         """
         if not pathlist:
-            return
+            return []
         buckets = {self.split_path(path)[0] for path in pathlist}
         if len(buckets) > 1:
             raise ValueError("Bulk delete files should refer to only one bucket")
