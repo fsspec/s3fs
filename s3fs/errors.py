@@ -140,15 +140,26 @@ def translate_boto_error(error, message=None, set_cause=True, *args, **kwargs):
     if error_response is None:
         # non-http error, or response is None:
         return error
+
+    request_id = ''
+    if 'ResponseMetadata' in error_response and 'RequestId' in error_response['ResponseMetadata']:
+        request_id = error_response['ResponseMetadata']['RequestId']
+    print(f'Request ID: {request_id}')
+    http_code = ''
+    if 'ResponseMetadata' in error_response and 'HTTPStatusCode' in error_response['ResponseMetadata']:
+        http_code = error_response['ResponseMetadata']['HTTPStatusCode']
+    print(f"Http code: {http_code}")
     code = error_response["Error"].get("Code")
     constructor = ERROR_CODE_TO_EXCEPTION.get(code)
     if constructor:
         if not message:
             message = error_response["Error"].get("Message", str(error))
+            message = f'{message}. Request ID: {request_id}, HTTP code: {http_code}'
         custom_exc = constructor(message, *args, **kwargs)
     else:
         # No match found, wrap this in an IOError with the appropriate message.
-        custom_exc = IOError(errno.EIO, message or str(error), *args)
+        message = f'{message or str(error)}. Request ID: {request_id}, HTTP code: {http_code}'
+        custom_exc = IOError(errno.EIO, message, *args)
 
     if set_cause:
         custom_exc.__cause__ = error
