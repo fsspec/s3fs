@@ -141,24 +141,28 @@ def translate_boto_error(error, message=None, set_cause=True, *args, **kwargs):
         # non-http error, or response is None:
         return error
 
+    # AWS s3 as well as moto (CI Backend) respond with ResponseMetadata that contains RequestId as well as
+    # HTTPStatusCode. As of 6/17/2024, minio doesn't seem to add RequestId to the response.
     request_id = ''
     if 'ResponseMetadata' in error_response and 'RequestId' in error_response['ResponseMetadata']:
         request_id = error_response['ResponseMetadata']['RequestId']
-    print(f'Request ID: {request_id}')
     http_code = ''
     if 'ResponseMetadata' in error_response and 'HTTPStatusCode' in error_response['ResponseMetadata']:
         http_code = error_response['ResponseMetadata']['HTTPStatusCode']
-    print(f"Http code: {http_code}")
+
     code = error_response["Error"].get("Code")
     constructor = ERROR_CODE_TO_EXCEPTION.get(code)
     if constructor:
         if not message:
             message = error_response["Error"].get("Message", str(error))
-            message = f'{message}. Request ID: {request_id}, HTTP code: {http_code}'
+            message = f'{message}, Request ID: {request_id}' if request_id else message
+            message = f'{message}, HTTP Status code: {http_code}' if http_code else message
         custom_exc = constructor(message, *args, **kwargs)
     else:
         # No match found, wrap this in an IOError with the appropriate message.
-        message = f'{message or str(error)}. Request ID: {request_id}, HTTP code: {http_code}'
+        message = message or str(error)
+        message = f'{message}, Request ID: {request_id}' if request_id else message
+        message = f'{message}, HTTP Status code: {http_code}' if http_code else message
         custom_exc = IOError(errno.EIO, message, *args)
 
     if set_cause:
