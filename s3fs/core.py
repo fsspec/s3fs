@@ -2086,7 +2086,14 @@ class S3FileSystem(AsyncFileSystem):
     async def open_async(self, path, mode="rb", **kwargs):
         if "b" not in mode or kwargs.get("compression"):
             raise ValueError
+        if "w" in mode or "a" in mode:
+            return await self._open_for_writing(path, mode, **kwargs)
         return S3AsyncStreamedFile(self, path, mode)
+
+    async def _open_for_writing(self, path, mode, **kwargs):
+        # Parse the path to get bucket and key
+        bucket, key, _ = self.split_path(path)
+        return S3AsyncStreamWriter(self, bucket, key)
 
 
 class S3File(AbstractBufferedFile):
@@ -2429,6 +2436,26 @@ class S3File(AbstractBufferedFile):
             self.mpu = None
 
 
+# Define a new class to represent the file-like object for writing
+class S3AsyncStreamWriter:
+    def __init__(self, s3_fs, bucket, key):
+        self.s3_fs = s3_fs
+        self.bucket = bucket
+        self.key = key
+        self.closed = False
+        self.loc = 0
+
+    async def write(self, data):
+        # Write data directly to S3 object
+        await self.s3_fs._call_s3(
+            "put_object",
+            Bucket=self.bucket,
+            Key=self.key,
+            Body=data,
+        )
+        self.loc += len(data)
+
+
 class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
     def __init__(self, fs, path, mode):
         self.fs = fs
@@ -2481,3 +2508,4 @@ async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
             resp["Body"].close()
 
     return await _error_wrapper(_call_and_read, retries=fs.retries)
+

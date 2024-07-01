@@ -2696,6 +2696,18 @@ def test_async_stream(s3_base):
                 break
             out.append(got)
 
+    async def write_stream():
+        fs = S3FileSystem(
+            anon=False,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        await fs._mkdir(test_bucket_name)
+        f = await fs.open_async(fn, mode="wb")
+        await f.write(data)
+        await f.close()
+
+    asyncio.run(write_stream())
     asyncio.run(read_stream())
     assert b"".join(out) == data
 
