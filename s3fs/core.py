@@ -2335,7 +2335,7 @@ class S3File(AbstractBufferedFile):
         else:
             self.buffer.seek(0)
 
-            # previously last small chunk was merged into previous one 
+            # previously last small chunk was merged into previous one
             # (and in some cases two chunks were equalized)
             # However, R2 imposes additional restriction that all but last chunk
             # are of same size, and last chunk can't be larger.
