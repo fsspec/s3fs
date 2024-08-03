@@ -2161,7 +2161,7 @@ class S3File(AbstractBufferedFile):
             raise ValueError("ACL not in %s", key_acls)
         self.mpu = None
         self.parts = None
-        self.awaits_upload = b'' # for multi-part uploads
+        self.awaits_upload = b""  # for multi-part uploads
         self.fill_cache = fill_cache
         self.s3_additional_kwargs = s3_additional_kwargs or {}
         self.req_kw = {"RequestPayer": "requester"} if requester_pays else {}
@@ -2324,7 +2324,7 @@ class S3File(AbstractBufferedFile):
         logger.debug(
             "Upload for %s, final=%s, loc=%s, buffer loc=%s"
             % (self, final, self.loc, self.buffer.tell())
-        )        
+        )
         if (
             self.autocommit
             and not self.append_block
@@ -2362,18 +2362,17 @@ class S3File(AbstractBufferedFile):
                     part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
                 self.parts.append(part_header)
 
-
             while received := self.buffer.read(self.blocksize):
-                # send in chunks 
+                # send in chunks of same size
                 self.awaits_upload += received
                 while len(self.awaits_upload) >= self.blocksize:
-                    upload_part(self.awaits_upload[:self.blocksize])
-                    self.awaits_upload = self.awaits_upload[self.blocksize:]
-                
+                    upload_part(self.awaits_upload[: self.blocksize])
+                    self.awaits_upload = self.awaits_upload[self.blocksize :]
+
             if final:
                 # send anything in the buffer
                 upload_part(self.awaits_upload)
-                self.awaits_upload = b''
+                self.awaits_upload = b""
 
         if self.autocommit and final:
             self.commit()
