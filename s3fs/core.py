@@ -296,7 +296,7 @@ class S3FileSystem(AsyncFileSystem):
         asynchronous=False,
         loop=None,
         max_concurrency=1,
-        fixed_upload_size: int | None = None,
+        fixed_upload_size: bool = False,
         **kwargs,
     ):
         if key and username:
@@ -334,8 +334,6 @@ class S3FileSystem(AsyncFileSystem):
         self.cache_regions = cache_regions
         self._s3 = None
         self.session = session
-        if fixed_upload_size is not None and fixed_upload_size < self.blocksize:
-            raise ValueError(f"{fixed_upload_size=} is less than {self.blocksize=}")
         self.fixed_upload_size = fixed_upload_size
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1")
@@ -2362,13 +2360,12 @@ class S3File(AbstractBufferedFile):
             def n_bytes_left() -> int:
                 return len(self.buffer.getbuffer()) - self.buffer.tell()
 
-            if self.fs.fixed_upload_size is not None:
+            min_chunk = 1 if final else self.blocksize
+            if self.fs.fixed_upload_size:
                 # all chunks have fixed size, exception: last one can be smaller
-                min_chunk = 1 if final else self.fs.fixed_upload_size
-                while n_bytes_left() >= self.fs.fixed_upload_size:
-                    upload_part(self.buffer.read(self.fixed_upload_size))
+                while n_bytes_left() >= min_chunk:
+                    upload_part(self.buffer.read(self.blocksize))
             else:
-                min_chunk = 1 if final else self.blocksize
                 while n_bytes_left() >= min_chunk:
                     upload_part(self.buffer.read(self.part_max))
 
