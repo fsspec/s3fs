@@ -248,6 +248,9 @@ class S3FileSystem(AsyncFileSystem):
         this parameter to affect ``pipe()``, ``cat()`` and ``get()``. Increasing this
         value will result in higher memory usage during multipart upload operations (by
         ``max_concurrency * chunksize`` bytes per file).
+    fixed_upload_size : bool (False)
+        Use same chunk size for all parts in multipart upload (last part can be smaller).
+        Cloudflare R2 storage requires fixed_upload_size=True for multipart uploads.
 
     The following parameters are passed on to fsspec:
 
