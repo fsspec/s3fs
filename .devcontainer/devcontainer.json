@@ -1,4 +1,11 @@
 {
   "image": "python:3.10-bookworm",
-  "postCreateCommand": "pip install uv && uv pip install --system -e . -r ./test_requirements.txt && pre-commit install"
+  "postCreateCommand": "pip install uv && uv pip install --system -e . -r ./test_requirements.txt && pre-commit install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ]
+    }
+  }
 }
