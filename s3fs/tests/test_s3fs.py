@@ -885,6 +885,9 @@ def test_seek(s3):
         f.write(b"123")
 
     with s3.open(a) as f:
+        assert f.read() == b"123"
+
+    with s3.open(a) as f:
         f.seek(1000)
         with pytest.raises(ValueError):
             f.seek(-1)
@@ -2749,3 +2752,32 @@ def test_bucket_versioning(s3):
     assert s3.is_bucket_versioned("maybe_versioned")
     s3.make_bucket_versioned("maybe_versioned", False)
     assert not s3.is_bucket_versioned("maybe_versioned")
+
+
+@pytest.fixture()
+def s3_fixed_upload_size(s3):
+    s3_fixed = S3FileSystem(
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        fixed_upload_size=True,
+    )
+    s3_fixed.invalidate_cache()
+    yield s3_fixed
+
+
+def test_upload_parts(s3_fixed_upload_size):
+    with s3_fixed_upload_size.open(a, "wb", block_size=6_000_000) as f:
+        f.write(b" " * 6_001_000)
+        assert len(f.buffer.getbuffer()) == 1000
+        # check we are at the right position
+        assert f.tell() == 6_001_000
+        # offset is introduced in fsspec.core, but never used.
+        # apparently it should keep offset for part that is already uploaded
+        assert f.offset == 6_000_000
+        f.write(b" " * 6_001_000)
+        assert len(f.buffer.getbuffer()) == 2000
+        assert f.tell() == 2 * 6_001_000
+        assert f.offset == 2 * 6_000_000
+
+    with s3_fixed_upload_size.open(a, "r") as f:
+        assert len(f.read()) == 6_001_000 * 2
