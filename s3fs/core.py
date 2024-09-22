@@ -2335,7 +2335,7 @@ class S3File(AbstractBufferedFile):
             and final
             and self.tell() < self.blocksize
         ):
-            # only happens when closing small file, use on-shot PUT
+            # only happens when closing small file, use one-shot PUT
             pass
         else:
             self.buffer.seek(0)
