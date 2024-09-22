@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import errno
+import io
 import logging
 import mimetypes
 import os
@@ -2374,7 +2375,14 @@ class S3File(AbstractBufferedFile):
 
         if self.autocommit and final:
             self.commit()
-        return not final
+        else:
+            # update 'upload offset'
+            self.offset += self.buffer.tell()
+            # create new smaller buffer, seek to file end
+            self.buffer = io.BytesIO(self.buffer.read())
+            self.buffer.seek(0, 2)
+
+        return False  # instruct fsspec.flush to NOT clear self.buffer
 
     def commit(self):
         logger.debug("Commit %s" % self)
