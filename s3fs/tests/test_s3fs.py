@@ -2781,3 +2781,21 @@ def test_upload_parts(s3_fixed_upload_size):
 
     with s3_fixed_upload_size.open(a, "r") as f:
         assert len(f.read()) == 6_001_000 * 2
+
+
+def test_upload_part_with_prime_pads(s3_fixed_upload_size):
+    block = 6_000_000
+    pad1, pad2 = 1013, 1019  # prime pad sizes to exclude divisibility
+    with s3_fixed_upload_size.open(a, "wb", block_size=block) as f:
+        f.write(b" " * (block + pad1))
+        assert len(f.buffer.getbuffer()) == pad1
+        # check we are at the right position
+        assert f.tell() == block + pad1
+        assert f.offset == block
+        f.write(b" " * (block + pad2))
+        assert len(f.buffer.getbuffer()) == pad1 + pad2
+        assert f.tell() == 2 * block + pad1 + pad2
+        assert f.offset == 2 * block
+
+    with s3_fixed_upload_size.open(a, "r") as f:
+        assert len(f.read()) == 2 * block + pad1 + pad2
