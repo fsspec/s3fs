@@ -24,11 +24,10 @@ jobs:
           fetch-depth: 0
 
       - name: Setup conda
-        uses: mamba-org/setup-micromamba@v1
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/env.yaml
-          create-args: >-
-            python=${{ matrix.PY }}
+          python-version: ${{ matrix.PY }}
 
       - name: Install
         shell: bash -l {0}
