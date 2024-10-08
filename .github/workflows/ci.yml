@@ -9,7 +9,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
         aiobotocore-version: [">=2.5.4,<2.6.0", ">=2.7.0,<2.8.0", ">=2.8.0,<2.9.0", "<3.0.0"]
 
     env:
@@ -27,7 +33,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: ci/env.yaml
-          python-version: ${{ matrix.PY }}
+          python-version: ${{ matrix.python-version }}
 
       - name: Install
         shell: bash -l {0}
