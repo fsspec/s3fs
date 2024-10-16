@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import errno
+import io
 import logging
 import mimetypes
 import os
@@ -248,6 +249,9 @@ class S3FileSystem(AsyncFileSystem):
         this parameter to affect ``pipe()``, ``cat()`` and ``get()``. Increasing this
         value will result in higher memory usage during multipart upload operations (by
         ``max_concurrency * chunksize`` bytes per file).
+    fixed_upload_size : bool (False)
+        Use same chunk size for all parts in multipart upload (last part can be smaller).
+        Cloudflare R2 storage requires fixed_upload_size=True for multipart uploads.
 
     The following parameters are passed on to fsspec:
 
@@ -296,6 +300,7 @@ class S3FileSystem(AsyncFileSystem):
         asynchronous=False,
         loop=None,
         max_concurrency=10,
+        fixed_upload_size: bool = False,
         **kwargs,
     ):
         if key and username:
@@ -333,6 +338,7 @@ class S3FileSystem(AsyncFileSystem):
         self.cache_regions = cache_regions
         self._s3 = None
         self.session = session
+        self.fixed_upload_size = fixed_upload_size
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1")
         self.max_concurrency = max_concurrency
@@ -2337,47 +2343,54 @@ class S3File(AbstractBufferedFile):
             and final
             and self.tell() < self.blocksize
         ):
-            # only happens when closing small file, use on-shot PUT
-            data1 = False
+            # only happens when closing small file, use one-shot PUT
+            pass
         else:
             self.buffer.seek(0)
-            (data0, data1) = (None, self.buffer.read(self.blocksize))
 
-        while data1:
-            # concurrency here??
-            (data0, data1) = (data1, self.buffer.read(self.blocksize))
-            data1_size = len(data1)
+            def upload_part(part_data: bytes):
+                if len(part_data) == 0:
+                    return
+                part = len(self.parts) + 1
+                logger.debug("Upload chunk %s, %s" % (self, part))
 
-            if 0 < data1_size < self.blocksize:
-                remainder = data0 + data1
-                remainder_size = self.blocksize + data1_size
+                out = self._call_s3(
+                    "upload_part",
+                    Bucket=bucket,
+                    PartNumber=part,
+                    UploadId=self.mpu["UploadId"],
+                    Body=part_data,
+                    Key=key,
+                )
 
-                if remainder_size <= self.part_max:
-                    (data0, data1) = (remainder, None)
-                else:
-                    partition = remainder_size // 2
-                    (data0, data1) = (remainder[:partition], remainder[partition:])
+                part_header = {"PartNumber": part, "ETag": out["ETag"]}
+                if "ChecksumSHA256" in out:
+                    part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
+                self.parts.append(part_header)
 
-            part = len(self.parts) + 1
-            logger.debug("Upload chunk %s, %s" % (self, part))
+            def n_bytes_left() -> int:
+                return len(self.buffer.getbuffer()) - self.buffer.tell()
 
-            out = self._call_s3(
-                "upload_part",
-                Bucket=bucket,
-                PartNumber=part,
-                UploadId=self.mpu["UploadId"],
-                Body=data0,
-                Key=key,
-            )
-
-            part_header = {"PartNumber": part, "ETag": out["ETag"]}
-            if "ChecksumSHA256" in out:
-                part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
-            self.parts.append(part_header)
+            min_chunk = 1 if final else self.blocksize
+            # TODO: concurrent here
+            if self.fs.fixed_upload_size:
+                # all chunks have fixed size, exception: last one can be smaller
+                while n_bytes_left() >= min_chunk:
+                    upload_part(self.buffer.read(self.blocksize))
+            else:
+                while n_bytes_left() >= min_chunk:
+                    upload_part(self.buffer.read(self.part_max))
 
         if self.autocommit and final:
             self.commit()
-        return not final
+        else:
+            # update 'upload offset'
+            self.offset += self.buffer.tell()
+            # create new smaller buffer, seek to file end
+            self.buffer = io.BytesIO(self.buffer.read())
+            self.buffer.seek(0, 2)
+
+        return False  # instruct fsspec.flush to NOT clear self.buffer
 
     def commit(self):
         logger.debug("Commit %s" % self)
