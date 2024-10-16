@@ -90,7 +90,10 @@ def s3_base():
 def reset_s3_fixture():
     # We reuse the MotoServer for all tests
     # But we do want a clean state for every test
-    requests.post(f"{endpoint_uri}/moto-api/reset")
+    try:
+        requests.post(f"{endpoint_uri}/moto-api/reset")
+    except:
+        pass
 
 
 def get_boto3_client():
@@ -1250,7 +1253,7 @@ def test_write_fails(s3):
 
 
 def test_write_blocks(s3):
-    with s3.open(test_bucket_name + "/temp", "wb") as f:
+    with s3.open(test_bucket_name + "/temp", "wb", block_size=5 * 2**20) as f:
         f.write(b"a" * 2 * 2**20)
         assert f.buffer.tell() == 2 * 2**20
         assert not (f.parts)
@@ -1784,7 +1787,7 @@ def test_change_defaults_only_subsequent():
         S3FileSystem.cachable = False  # don't reuse instances with same pars
 
         fs_default = S3FileSystem(client_kwargs={"endpoint_url": endpoint_uri})
-        assert fs_default.default_block_size == 5 * (1024**2)
+        assert fs_default.default_block_size == 50 * (1024**2)
 
         fs_overridden = S3FileSystem(
             default_block_size=64 * (1024**2),
@@ -1801,7 +1804,7 @@ def test_change_defaults_only_subsequent():
 
         # Test the other file systems created to see if their block sizes changed
         assert fs_overridden.default_block_size == 64 * (1024**2)
-        assert fs_default.default_block_size == 5 * (1024**2)
+        assert fs_default.default_block_size == 50 * (1024**2)
     finally:
         S3FileSystem.default_block_size = 5 * (1024**2)
         S3FileSystem.cachable = True

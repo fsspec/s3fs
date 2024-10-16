@@ -11,7 +11,7 @@ from s3fs.core import S3FileSystem
 test_bucket_name = "test"
 secure_bucket_name = "test-secure"
 versioned_bucket_name = "test-versioned"
-port = 5555
+port = 5556
 endpoint_uri = "http://127.0.0.1:%s/" % port
 
 
@@ -109,6 +109,9 @@ class S3fsFixtures(AbstractFixtures):
                 pass
             timeout -= 0.1
             time.sleep(0.1)
+            if proc.poll() is not None:
+                proc.terminate()
+                raise RuntimeError("Starting moto server failed")
         print("server up")
         yield
         print("moto done")

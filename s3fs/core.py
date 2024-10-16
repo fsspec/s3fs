@@ -269,7 +269,7 @@ class S3FileSystem(AsyncFileSystem):
     connect_timeout = 5
     retries = 5
     read_timeout = 15
-    default_block_size = 5 * 2**20
+    default_block_size = 50 * 2**20
     protocol = ("s3", "s3a")
     _extra_tokenize_attributes = ("default_block_size",)
 
@@ -295,7 +295,7 @@ class S3FileSystem(AsyncFileSystem):
         cache_regions=False,
         asynchronous=False,
         loop=None,
-        max_concurrency=1,
+        max_concurrency=10,
         **kwargs,
     ):
         if key and username:
@@ -1127,8 +1127,11 @@ class S3FileSystem(AsyncFileSystem):
 
         return await _error_wrapper(_call_and_read, retries=self.retries)
 
-    async def _pipe_file(self, path, data, chunksize=50 * 2**20, **kwargs):
+    async def _pipe_file(
+        self, path, data, chunksize=50 * 2**20, max_concurrency=None, **kwargs
+    ):
         bucket, key, _ = self.split_path(path)
+        concurrency = max_concurrency or self.max_concurrency
         size = len(data)
         # 5 GB is the limit for an S3 PUT
         if size < min(5 * 2**30, 2 * chunksize):
@@ -1140,23 +1143,27 @@ class S3FileSystem(AsyncFileSystem):
             mpu = await self._call_s3(
                 "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
             )
-
-            # TODO: cancel MPU if the following fails
-            out = [
-                await self._call_s3(
-                    "upload_part",
-                    Bucket=bucket,
-                    PartNumber=i + 1,
-                    UploadId=mpu["UploadId"],
-                    Body=data[off : off + chunksize],
-                    Key=key,
+            ranges = list(range(0, len(data), chunksize))
+            inds = list(range(0, len(ranges), concurrency)) + [len(ranges)]
+            parts = []
+            for start, stop in zip(inds[:-1], inds[1:]):
+                out = await asyncio.gather(
+                    *[
+                        self._call_s3(
+                            "upload_part",
+                            Bucket=bucket,
+                            PartNumber=i + 1,
+                            UploadId=mpu["UploadId"],
+                            Body=data[ranges[i] : ranges[i] + chunksize],
+                            Key=key,
+                        )
+                        for i in range(start, stop)
+                    ]
                 )
-                for i, off in enumerate(range(0, len(data), chunksize))
-            ]
-
-            parts = [
-                {"PartNumber": i + 1, "ETag": o["ETag"]} for i, o in enumerate(out)
-            ]
+                parts.extend(
+                    {"PartNumber": i + 1, "ETag": o["ETag"]}
+                    for i, o in zip(range(start, stop), out)
+                )
             await self._call_s3(
                 "complete_multipart_upload",
                 Bucket=bucket,
@@ -2139,7 +2146,7 @@ class S3File(AbstractBufferedFile):
         s3,
         path,
         mode="rb",
-        block_size=5 * 2**20,
+        block_size=50 * 2**20,
         acl=False,
         version_id=None,
         fill_cache=True,
@@ -2337,6 +2344,7 @@ class S3File(AbstractBufferedFile):
             (data0, data1) = (None, self.buffer.read(self.blocksize))
 
         while data1:
+            # concurrency here??
             (data0, data1) = (data1, self.buffer.read(self.blocksize))
             data1_size = len(data1)
 
