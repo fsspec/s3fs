@@ -1141,7 +1141,7 @@ class S3FileSystem(AsyncFileSystem):
         size = len(data)
         # 5 GB is the limit for an S3 PUT
         if size < min(5 * 2**30, 2 * chunksize):
-            return await self._call_s3(
+            await self._call_s3(
                 "put_object", Bucket=bucket, Key=key, Body=data, **kwargs
             )
         else:

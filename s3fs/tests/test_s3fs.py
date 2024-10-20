@@ -2802,3 +2802,13 @@ def test_upload_part_with_prime_pads(s3_fixed_upload_size):
 
     with s3_fixed_upload_size.open(a, "r") as f:
         assert len(f.read()) == 2 * block + pad1 + pad2
+
+
+@pytest.mark.asyncio
+async def test_invalidate_cache(s3: s3fs.S3FileSystem) -> None:
+    await s3._call_s3("put_object", Bucket=test_bucket_name, Key="a/b.txt", Body=b"abc")
+    before = await s3._ls(f"{test_bucket_name}/a/")
+    assert sorted(before) == ["test/a/b.txt"]
+    await s3._pipe_file(f"{test_bucket_name}/a/c.txt", data=b"abc")
+    after = await s3._ls(f"{test_bucket_name}/a/")
+    assert sorted(after) == ["test/a/b.txt", "test/a/c.txt"]
