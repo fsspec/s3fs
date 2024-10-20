@@ -1141,9 +1141,11 @@ class S3FileSystem(AsyncFileSystem):
         size = len(data)
         # 5 GB is the limit for an S3 PUT
         if size < min(5 * 2**30, 2 * chunksize):
-            await self._call_s3(
+            out = await self._call_s3(
                 "put_object", Bucket=bucket, Key=key, Body=data, **kwargs
             )
+            self.invalidate_cache(path)
+            return out
         else:
 
             mpu = await self._call_s3(
@@ -1177,7 +1179,7 @@ class S3FileSystem(AsyncFileSystem):
                 UploadId=mpu["UploadId"],
                 MultipartUpload={"Parts": parts},
             )
-        self.invalidate_cache(path)
+            self.invalidate_cache(path)
 
     async def _put_file(
         self,
