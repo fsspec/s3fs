@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2024.10.0
+---------
+
+- invalidate cache in one-shot pipe file (#904)
+- make pipe() concurrent (#901)
+- add py3.13 (#898)
+
 2024.9.0
 --------
 
