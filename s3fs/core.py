@@ -1285,7 +1285,7 @@ class S3FileSystem(AsyncFileSystem):
                     )
                 )
             else:
-                out.append(await _upload_chunk(chunk, len(out) + 1))
+                out.append(await _upload_chunk(chunks[0], len(out) + 1))
         return out
 
     async def _get_file(
