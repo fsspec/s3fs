@@ -1275,17 +1275,14 @@ class S3FileSystem(AsyncFileSystem):
                     chunks.append(chunk)
             if not chunks:
                 break
-            if len(chunks) > 1:
-                out.extend(
-                    await asyncio.gather(
-                        *[
-                            _upload_chunk(chunk, len(out) + i)
-                            for i, chunk in enumerate(chunks, 1)
-                        ]
-                    )
+            out.extend(
+                await asyncio.gather(
+                    *[
+                        _upload_chunk(chunk, len(out) + i)
+                        for i, chunk in enumerate(chunks, 1)
+                    ]
                 )
-            else:
-                out.append(await _upload_chunk(chunks[0], len(out) + 1))
+            )
         return out
 
     async def _get_file(

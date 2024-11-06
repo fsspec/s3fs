@@ -1017,6 +1017,24 @@ def test_put_file_with_callback(s3, tmpdir, size):
     assert cb.size == os.stat(test_file).st_size
     assert cb.value == cb.size
 
+    assert s3.size(test_bucket_name + "/temp") == 11 * size
+
+
+@pytest.mark.parametrize("factor", [1, 5, 6])
+def test_put_file_does_not_truncate(s3, tmpdir, factor):
+    test_file = str(tmpdir.join("test.json"))
+
+    chunksize = 5 * 2**20
+    block = b"x" * chunksize
+
+    with open(test_file, "wb") as f:
+        f.write(block * factor)
+
+    s3.put_file(
+        test_file, test_bucket_name + "/temp", max_concurrency=5, chunksize=chunksize
+    )
+    assert s3.size(test_bucket_name + "/temp") == factor * chunksize
+
 
 @pytest.mark.parametrize("size", [2**10, 2**20, 10 * 2**20])
 def test_pipe_cat_big(s3, size):
