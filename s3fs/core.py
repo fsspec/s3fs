@@ -14,7 +14,7 @@ from urllib3.exceptions import IncompleteRead
 
 import fsspec  # noqa: F401
 from fsspec.spec import AbstractBufferedFile
-from fsspec.utils import infer_storage_options, tokenize, setup_logging as setup_logger
+from fsspec.utils import tokenize, setup_logging as setup_logger
 from fsspec.asyn import (
     AsyncFileSystem,
     AbstractAsyncStreamedFile,
@@ -391,8 +391,9 @@ class S3FileSystem(AsyncFileSystem):
         Assume that we want to use version_aware mode for
         the filesystem.
         """
-        url_storage_opts = infer_storage_options(urlpath)
-        url_query = url_storage_opts.get("url_query")
+        from urllib.parse import urlsplit
+
+        url_query = urlsplit(urlpath).query
         out = {}
         if url_query is not None:
             from urllib.parse import parse_qs
