@@ -79,6 +79,7 @@ def s3_base():
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foo"
     if "AWS_ACCESS_KEY_ID" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = "foo"
+    os.environ.pop("AWS_PROFILE", None)
 
     print("server up")
     yield
@@ -2142,6 +2143,42 @@ def test_via_fsspec(s3):
         "s3://mine/oi", "rb", client_kwargs={"endpoint_url": endpoint_uri}
     ) as f:
         assert f.read() == b"hello"
+
+
+@pytest.mark.parametrize(
+    ["raw_url", "expected_url", "expected_version_aware"],
+    [
+        (
+            "s3://arn:aws:s3:us-west-2:123456789012:accesspoint/abc/123.jpg",
+            "arn:aws:s3:us-west-2:123456789012:accesspoint/abc/123.jpg",
+            False,
+        ),
+        (
+            "s3://arn:aws:s3:us-west-2:123456789012:accesspoint/abc/123.jpg?versionId=some_version_id",
+            "arn:aws:s3:us-west-2:123456789012:accesspoint/abc/123.jpg?versionId=some_version_id",
+            True,
+        ),
+        (
+            "s3://xyz/abc/123.jpg",
+            "xyz/abc/123.jpg",
+            False,
+        ),
+        (
+            "s3://xyz/abc/123.jpg?versionId=some_version_id",
+            "xyz/abc/123.jpg?versionId=some_version_id",
+            True,
+        ),
+    ],
+)
+def test_fsspec_url_to_fs_compatability(
+    s3, raw_url, expected_url, expected_version_aware
+):
+    import fsspec
+
+    fs, url = fsspec.url_to_fs(raw_url)
+    assert isinstance(fs, type(s3))
+    assert fs.version_aware is expected_version_aware
+    assert url == expected_url
 
 
 def test_repeat_exists(s3):
