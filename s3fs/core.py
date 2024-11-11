@@ -852,7 +852,7 @@ class S3FileSystem(AsyncFileSystem):
         #         return super().find(path)
         #     # else: we refresh anyway, having at least two missing trees
         out = await self._lsdir(path, delimiter="", prefix=prefix, **kwargs)
-        if not out and key:
+        if (not out and key) and not prefix:
             try:
                 out = [await self._info(path)]
             except FileNotFoundError:

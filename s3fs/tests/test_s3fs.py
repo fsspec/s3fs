@@ -2498,6 +2498,7 @@ def test_find_with_prefix(s3):
     s3.touch(test_bucket_name + "/prefixes2")
     assert len(s3.find(test_bucket_name + "/prefixes")) == 100
     assert len(s3.find(test_bucket_name, prefix="prefixes")) == 101
+    assert len(s3.find(test_bucket_name + "/prefixes", prefix="test2_")) == 0
 
     assert len(s3.find(test_bucket_name + "/prefixes/test_")) == 0
     assert len(s3.find(test_bucket_name + "/prefixes", prefix="test_")) == 100
