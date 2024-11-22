@@ -1976,6 +1976,8 @@ class S3FileSystem(AsyncFileSystem):
             UploadId=mpu,
         )
 
+    abort_mpu = sync_wrapper(_abort_mpu)
+
     async def _clear_multipart_uploads(self, bucket):
         """Remove any partial uploads in the bucket"""
         await asyncio.gather(
