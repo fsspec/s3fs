@@ -7,6 +7,7 @@ Changelog
 - invalidate cache in one-shot pipe file (#904)
 - make pipe() concurrent (#901)
 - add py3.13 (#898)
+- suppoert R2 multi-part uploads (#888)
 
 2024.9.0
 --------

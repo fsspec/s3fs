@@ -137,11 +137,18 @@ def translate_boto_error(error, message=None, set_cause=True, *args, **kwargs):
     recognized, an IOError with the original error message is returned.
     """
     error_response = getattr(error, "response", None)
+
     if error_response is None:
         # non-http error, or response is None:
         return error
     code = error_response["Error"].get("Code")
-    constructor = ERROR_CODE_TO_EXCEPTION.get(code)
+    if (
+        code == "PreconditionFailed"
+        and error_response["Error"].get("Condition", "") == "If-None-Match"
+    ):
+        constructor = FileExistsError
+    else:
+        constructor = ERROR_CODE_TO_EXCEPTION.get(code)
     if constructor:
         if not message:
             message = error_response["Error"].get("Message", str(error))

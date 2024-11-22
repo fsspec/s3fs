@@ -75,45 +75,17 @@ class S3fsFixtures(AbstractFixtures):
 
     @pytest.fixture(scope="class")
     def _s3_base(self):
-        # writable local S3 system
-        import shlex
-        import subprocess
+        # copy of s3_base in test_s3fs
+        from moto.moto_server.threaded_moto_server import ThreadedMotoServer
 
-        try:
-            # should fail since we didn't start server yet
-            r = requests.get(endpoint_uri)
-        except:
-            pass
-        else:
-            if r.ok:
-                raise RuntimeError("moto server already up")
+        server = ThreadedMotoServer(ip_address="127.0.0.1", port=port)
+        server.start()
         if "AWS_SECRET_ACCESS_KEY" not in os.environ:
             os.environ["AWS_SECRET_ACCESS_KEY"] = "foo"
         if "AWS_ACCESS_KEY_ID" not in os.environ:
             os.environ["AWS_ACCESS_KEY_ID"] = "foo"
-        proc = subprocess.Popen(
-            shlex.split("moto_server s3 -p %s" % port),
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-        )
 
-        timeout = 5
-        while timeout > 0:
-            try:
-                print("polling for moto server")
-                r = requests.get(endpoint_uri)
-                if r.ok:
-                    break
-            except:
-                pass
-            timeout -= 0.1
-            time.sleep(0.1)
-            if proc.poll() is not None:
-                proc.terminate()
-                raise RuntimeError("Starting moto server failed")
         print("server up")
         yield
         print("moto done")
-        proc.terminate()
-        proc.wait()
+        server.stop()

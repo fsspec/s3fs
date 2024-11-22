@@ -2812,3 +2812,30 @@ async def test_invalidate_cache(s3: s3fs.S3FileSystem) -> None:
     await s3._pipe_file(f"{test_bucket_name}/a/c.txt", data=b"abc")
     after = await s3._ls(f"{test_bucket_name}/a/")
     assert sorted(after) == ["test/a/b.txt", "test/a/c.txt"]
+
+
+@pytest.mark.xfail(reason="moto doesn't support conditional MPU")
+def test_pipe_exclusive_big(s3):
+    chunksize = 5 * 2**20  # minimum allowed
+    data = b"x" * chunksize * 3
+    s3.pipe(f"{test_bucket_name}/afile", data, mode="overwrite", chunksize=chunksize)
+    s3.pipe(f"{test_bucket_name}/afile", data, mode="overwrite", chunksize=chunksize)
+    with pytest.raises(FileExistsError):
+        s3.pipe(f"{test_bucket_name}/afile", data, mode="create", chunksize=chunksize)
+    assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+@pytest.mark.xfail(reason="moto doesn't support conditional MPU")
+def test_put_exclusive_big(s3, tempdir):
+    chunksize = 5 * 2**20  # minimum allowed
+    data = b"x" * chunksize * 3
+    fn = f"{tempdir}/afile"
+    with open(fn, "wb") as f:
+        f.write(fn)
+    s3.put(fn, f"{test_bucket_name}/afile", data, mode="overwrite", chunksize=chunksize)
+    s3.put(fn, f"{test_bucket_name}/afile", data, mode="overwrite", chunksize=chunksize)
+    with pytest.raises(FileExistsError):
+        s3.put(
+            fn, f"{test_bucket_name}/afile", data, mode="create", chunksize=chunksize
+        )
+    assert not s3.list_multipart_uploads(test_bucket_name)

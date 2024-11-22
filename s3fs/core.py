@@ -1134,15 +1134,26 @@ class S3FileSystem(AsyncFileSystem):
         return await _error_wrapper(_call_and_read, retries=self.retries)
 
     async def _pipe_file(
-        self, path, data, chunksize=50 * 2**20, max_concurrency=None, **kwargs
+        self,
+        path,
+        data,
+        chunksize=50 * 2**20,
+        max_concurrency=None,
+        mode="overwrite",
+        **kwargs,
     ):
         bucket, key, _ = self.split_path(path)
         concurrency = max_concurrency or self.max_concurrency
         size = len(data)
+        if mode == "create":
+            match = {"IfNoneMatch": "*"}
+        else:
+            match = {}
+
         # 5 GB is the limit for an S3 PUT
         if size < min(5 * 2**30, 2 * chunksize):
             out = await self._call_s3(
-                "put_object", Bucket=bucket, Key=key, Body=data, **kwargs
+                "put_object", Bucket=bucket, Key=key, Body=data, **kwargs, **match
             )
             self.invalidate_cache(path)
             return out
@@ -1154,32 +1165,37 @@ class S3FileSystem(AsyncFileSystem):
             ranges = list(range(0, len(data), chunksize))
             inds = list(range(0, len(ranges), concurrency)) + [len(ranges)]
             parts = []
-            for start, stop in zip(inds[:-1], inds[1:]):
-                out = await asyncio.gather(
-                    *[
-                        self._call_s3(
-                            "upload_part",
-                            Bucket=bucket,
-                            PartNumber=i + 1,
-                            UploadId=mpu["UploadId"],
-                            Body=data[ranges[i] : ranges[i] + chunksize],
-                            Key=key,
-                        )
-                        for i in range(start, stop)
-                    ]
+            try:
+                for start, stop in zip(inds[:-1], inds[1:]):
+                    out = await asyncio.gather(
+                        *[
+                            self._call_s3(
+                                "upload_part",
+                                Bucket=bucket,
+                                PartNumber=i + 1,
+                                UploadId=mpu["UploadId"],
+                                Body=data[ranges[i] : ranges[i] + chunksize],
+                                Key=key,
+                            )
+                            for i in range(start, stop)
+                        ]
+                    )
+                    parts.extend(
+                        {"PartNumber": i + 1, "ETag": o["ETag"]}
+                        for i, o in zip(range(start, stop), out)
+                    )
+                await self._call_s3(
+                    "complete_multipart_upload",
+                    Bucket=bucket,
+                    Key=key,
+                    UploadId=mpu["UploadId"],
+                    MultipartUpload={"Parts": parts},
+                    **match,
                 )
-                parts.extend(
-                    {"PartNumber": i + 1, "ETag": o["ETag"]}
-                    for i, o in zip(range(start, stop), out)
-                )
-            await self._call_s3(
-                "complete_multipart_upload",
-                Bucket=bucket,
-                Key=key,
-                UploadId=mpu["UploadId"],
-                MultipartUpload={"Parts": parts},
-            )
-            self.invalidate_cache(path)
+                self.invalidate_cache(path)
+            except Exception:
+                await self._abort_mpu(bucket, key, mpu["UploadId"])
+                raise
 
     async def _put_file(
         self,
@@ -1188,6 +1204,7 @@ class S3FileSystem(AsyncFileSystem):
         callback=_DEFAULT_CALLBACK,
         chunksize=50 * 2**20,
         max_concurrency=None,
+        mode="overwrite",
         **kwargs,
     ):
         bucket, key, _ = self.split_path(rpath)
@@ -1199,6 +1216,10 @@ class S3FileSystem(AsyncFileSystem):
                 await self._mkdir(lpath)
         size = os.path.getsize(lpath)
         callback.set_size(size)
+        if mode == "create":
+            match = {"IfNoneMatch": "*"}
+        else:
+            match = {}
 
         if "ContentType" not in kwargs:
             content_type, _ = mimetypes.guess_type(lpath)
@@ -1209,7 +1230,7 @@ class S3FileSystem(AsyncFileSystem):
             if size < min(5 * 2**30, 2 * chunksize):
                 chunk = f0.read()
                 await self._call_s3(
-                    "put_object", Bucket=bucket, Key=key, Body=chunk, **kwargs
+                    "put_object", Bucket=bucket, Key=key, Body=chunk, **kwargs, **match
                 )
                 callback.relative_update(size)
             else:
@@ -1217,25 +1238,31 @@ class S3FileSystem(AsyncFileSystem):
                 mpu = await self._call_s3(
                     "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
                 )
-                out = await self._upload_file_part_concurrent(
-                    bucket,
-                    key,
-                    mpu,
-                    f0,
-                    callback=callback,
-                    chunksize=chunksize,
-                    max_concurrency=max_concurrency,
-                )
-                parts = [
-                    {"PartNumber": i + 1, "ETag": o["ETag"]} for i, o in enumerate(out)
-                ]
-                await self._call_s3(
-                    "complete_multipart_upload",
-                    Bucket=bucket,
-                    Key=key,
-                    UploadId=mpu["UploadId"],
-                    MultipartUpload={"Parts": parts},
-                )
+                try:
+                    out = await self._upload_file_part_concurrent(
+                        bucket,
+                        key,
+                        mpu,
+                        f0,
+                        callback=callback,
+                        chunksize=chunksize,
+                        max_concurrency=max_concurrency,
+                    )
+                    parts = [
+                        {"PartNumber": i + 1, "ETag": o["ETag"]}
+                        for i, o in enumerate(out)
+                    ]
+                    await self._call_s3(
+                        "complete_multipart_upload",
+                        Bucket=bucket,
+                        Key=key,
+                        UploadId=mpu["UploadId"],
+                        MultipartUpload={"Parts": parts},
+                        **match,
+                    )
+                except Exception:
+                    await self._abort_mpu(bucket, key, mpu["UploadId"])
+                    raise
         while rpath:
             self.invalidate_cache(rpath)
             rpath = self._parent(rpath)
@@ -1941,18 +1968,20 @@ class S3FileSystem(AsyncFileSystem):
 
     list_multipart_uploads = sync_wrapper(_list_multipart_uploads)
 
+    async def _abort_mpu(self, bucket, key, mpu):
+        await self._call_s3(
+            "abort_multipart_upload",
+            Bucket=bucket,
+            Key=key,
+            UploadId=mpu,
+        )
+
     async def _clear_multipart_uploads(self, bucket):
         """Remove any partial uploads in the bucket"""
-        out = await self._list_multipart_uploads(bucket)
         await asyncio.gather(
             *[
-                self._call_s3(
-                    "abort_multipart_upload",
-                    Bucket=bucket,
-                    Key=upload["Key"],
-                    UploadId=upload["UploadId"],
-                )
-                for upload in out
+                self._abort_mpu(bucket, upload["Key"], upload["UploadId"])
+                for upload in await self._list_multipart_uploads(bucket)
             ]
         )
 
@@ -2414,6 +2443,10 @@ class S3File(AbstractBufferedFile):
                 raise RuntimeError
         else:
             logger.debug("Complete multi-part upload for %s " % self)
+            if "x" in self.mode:
+                match = {"IfNoneMatch": "*"}
+            else:
+                match = {}
             part_info = {"Parts": self.parts}
             write_result = self._call_s3(
                 "complete_multipart_upload",
@@ -2421,6 +2454,7 @@ class S3File(AbstractBufferedFile):
                 Key=self.key,
                 UploadId=self.mpu["UploadId"],
                 MultipartUpload=part_info,
+                **match,
             )
 
         if self.fs.version_aware:
@@ -2443,12 +2477,7 @@ class S3File(AbstractBufferedFile):
 
     def _abort_mpu(self):
         if self.mpu:
-            self._call_s3(
-                "abort_multipart_upload",
-                Bucket=self.bucket,
-                Key=self.key,
-                UploadId=self.mpu["UploadId"],
-            )
+            self.fs.abort_mpu(self.bucket, self.key, self.mpu["UploadId"])
             self.mpu = None
 
 

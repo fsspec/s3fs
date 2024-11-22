@@ -12,3 +12,11 @@ class TestS3fsGet(abstract.AbstractGetTests, S3fsFixtures):
 
 class TestS3fsPut(abstract.AbstractPutTests, S3fsFixtures):
     pass
+
+
+class TestS3fsPipe(abstract.AbstractPipeTests, S3fsFixtures):
+    pass
+
+
+class TestS3fsOpen(abstract.AbstractOpenTests, S3fsFixtures):
+    pass
