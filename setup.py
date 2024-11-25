@@ -20,7 +20,6 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
@@ -34,7 +33,7 @@ setup(
     license="BSD",
     keywords="s3, boto",
     packages=["s3fs"],
-    python_requires=">= 3.8",
+    python_requires=">= 3.9",
     install_requires=[open("requirements.txt").read().strip().split("\n")],
     extras_require={
         "awscli": [f"aiobotocore[awscli]{aiobotocore_version_suffix}"],

@@ -641,6 +641,10 @@ class S3FileSystem(AsyncFileSystem):
         mode: string
             One of 'r', 'w', 'a', 'rb', 'wb', or 'ab'. These have the same meaning
             as they do for the built-in `open` function.
+            "x" mode, exclusive write, is only known to work on AWS S3, and
+            requires botocore>1.35.20. If the file is multi-part (i.e., has more
+            than one block), the condition is only checked on commit; if this fails,
+            the MPU is aborted.
         block_size: int
             Size of data-node blocks if reading
         fill_cache: bool
@@ -1142,6 +1146,10 @@ class S3FileSystem(AsyncFileSystem):
         mode="overwrite",
         **kwargs,
     ):
+        """
+        mode=="create", exclusive write, is only known to work on AWS S3, and
+        requires botocore>1.35.20
+        """
         bucket, key, _ = self.split_path(path)
         concurrency = max_concurrency or self.max_concurrency
         size = len(data)
@@ -1207,6 +1215,10 @@ class S3FileSystem(AsyncFileSystem):
         mode="overwrite",
         **kwargs,
     ):
+        """
+        mode=="create", exclusive write, is only known to work on AWS S3, and
+        requires botocore>1.35.20
+        """
         bucket, key, _ = self.split_path(rpath)
         if os.path.isdir(lpath):
             if key:
