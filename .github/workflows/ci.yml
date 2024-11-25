@@ -38,9 +38,9 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install git+https://github.com/fsspec/filesystem_spec
-          pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}" boto3  # boto3 to ensure compatibility
+          pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}"
           pip install . --no-deps
-          pip show aiobotocore boto3 botocore
+          pip show aiobotocore aiobotocore botocore
 
       - name: Run Tests
         shell: bash -l {0}
