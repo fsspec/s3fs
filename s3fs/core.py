@@ -1884,7 +1884,7 @@ class S3FileSystem(AsyncFileSystem):
                 Key=key,
                 PartNumber=i + 1,
                 UploadId=mpu["UploadId"],
-                CopySource=self._strip_prefix(path1),
+                CopySource=self._strip_protocol(path1),
                 CopySourceRange="bytes=%i-%i" % (brange_first, brange_last),
             )
             for i, (brange_first, brange_last) in enumerate(_get_brange(size, block))
