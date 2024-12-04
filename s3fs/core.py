@@ -56,7 +56,7 @@ if "S3FS_LOGGING_LEVEL" in os.environ:
     setup_logging()
 
 
-MANAGED_COPY_THRESHOLD = 5 * 2**30
+MANAGED_COPY_THRESHOLD = 150 * 2**20
 # Certain rate-limiting responses can send invalid XML
 # (see https://github.com/fsspec/s3fs/issues/484), which can result in a parser error
 # deep within botocore. So we treat those as retryable as well, even though there could
@@ -1862,7 +1862,7 @@ class S3FileSystem(AsyncFileSystem):
         )
         self.invalidate_cache(path2)
 
-    async def _copy_managed(self, path1, path2, size, block=5 * 2**30, **kwargs):
+    async def _copy_managed(self, path1, path2, size, block=50 * 2**20, **kwargs):
         """Copy file between locations on S3 as multi-part
 
         block: int
@@ -1884,7 +1884,7 @@ class S3FileSystem(AsyncFileSystem):
                 Key=key,
                 PartNumber=i + 1,
                 UploadId=mpu["UploadId"],
-                CopySource=path1,
+                CopySource=self._strip_prefix(path1),
                 CopySourceRange="bytes=%i-%i" % (brange_first, brange_last),
             )
             for i, (brange_first, brange_last) in enumerate(_get_brange(size, block))
