@@ -1216,15 +1216,15 @@ def test_write_limit(s3):
 
 
 def test_write_small_secure(s3):
-    # Unfortunately moto does not yet support enforcing SSE policies.  It also
-    # does not return the correct objects that can be used to test the results
-    # effectively.
-    # This test is left as a placeholder in case moto eventually supports this.
-    sse_params = SSEParams(server_side_encryption="aws:kms")
-    with s3.open(secure_bucket_name + "/test", "wb", writer_kwargs=sse_params) as f:
+    s3 = S3FileSystem(
+        s3_additional_kwargs={"ServerSideEncryption": "aws:kms"},
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    s3.mkdir("mybucket")
+    with s3.open("mybucket/test", "wb") as f:
         f.write(b"hello")
-    assert s3.cat(secure_bucket_name + "/test") == b"hello"
-    sync(s3.loop, s3.s3.head_object, Bucket=secure_bucket_name, Key="test")
+    assert s3.cat("mybucket/test") == b"hello"
+    sync(s3.loop, s3.s3.head_object, Bucket="mybucket", Key="test")
 
 
 def test_write_large_secure(s3):
