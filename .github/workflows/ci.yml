@@ -41,7 +41,7 @@ jobs:
           pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}"
           pip install --upgrade "botocore" --no-deps
           pip install . --no-deps
-          pip show aiobotocore botocore
+          pip list
 
       - name: Run Tests
         shell: bash -l {0}
