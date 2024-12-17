@@ -111,7 +111,9 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
         kwargs = {}
     for i in range(retries):
         try:
-            return await func(*args, **kwargs)
+            out = await func(*args, **kwargs)
+            logger.debug("Response: %s", out)
+            return out
         except S3_RETRYABLE_ERRORS as e:
             err = e
             logger.debug("Retryable error: %s", e)
