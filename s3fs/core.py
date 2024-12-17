@@ -2395,7 +2395,9 @@ class S3File(AbstractBufferedFile):
                 if len(part_data) == 0:
                     return
                 part = len(self.parts) + 1
-                logger.debug("Upload chunk %s, %s" % (self, part))
+                logger.debug(
+                    "Upload chunk %s, %s; %s bytes" % (self, part, len(part_data))
+                )
 
                 out = self._call_s3(
                     "upload_part",
