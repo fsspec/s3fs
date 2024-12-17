@@ -26,8 +26,6 @@ from fsspec.asyn import sync
 from fsspec.callbacks import Callback
 from packaging import version
 
-fsspec.utils.setup_logging(logger_name="s3fs")
-
 test_bucket_name = "test"
 secure_bucket_name = "test-secure"
 versioned_bucket_name = "test-versioned"
