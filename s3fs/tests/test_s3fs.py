@@ -1288,11 +1288,11 @@ def test_write_blocks(s3):
         f.write(b"a" * 2 * 2**20)
         assert f.mpu
         assert f.parts
-    assert s3.info(test_bucket_name + "/temp")["size"] == 6 * 2**20
-    with s3.open(test_bucket_name + "/temp", "wb", block_size=10 * 2**20) as f:
+    assert s3.info(test_bucket_name + "/temp2")["size"] == 6 * 2**20
+    with s3.open(test_bucket_name + "/temp2", "wb", block_size=10 * 2**20) as f:
         f.write(b"a" * 15 * 2**20)
         assert f.buffer.tell() == 0
-    assert s3.info(test_bucket_name + "/temp")["size"] == 15 * 2**20
+    assert s3.info(test_bucket_name + "/temp2")["size"] == 15 * 2**20
 
 
 def test_readline(s3):
