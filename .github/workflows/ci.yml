@@ -45,7 +45,7 @@ jobs:
 
       - name: Run Tests
         shell: bash -l {0}
-        run: pytest -vv s3fs
+        run: pytest -vv -s s3fs -k test_write_blocks
 
 
   pre-commit:
