@@ -1408,6 +1408,7 @@ def test_append(s3):
         pass  # append, no write, big file
     data = s3.cat(a)
     assert len(data) == 10 * 2**20 and set(data) == set(b"a")
+    time.sleep(0.1)
 
     with s3.open(a, "ab") as f:
         assert f.parts is None
