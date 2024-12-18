@@ -1415,6 +1415,7 @@ def test_append(s3):
         assert f.parts
         assert f.tell() == 10 * 2**20
         f.write(b"extra")  # append, small write, big file
+    time.sleep(0.1)
     data = s3.cat(a)
     assert len(data) == 10 * 2**20 + len(b"extra")
     assert data[-5:] == b"extra"
@@ -1423,6 +1424,7 @@ def test_append(s3):
         assert f.tell() == 10 * 2**20 + 5
         f.write(b"b" * 10 * 2**20)  # append, big write, big file
         assert f.tell() == 20 * 2**20 + 5
+    time.sleep(0.1)
     data = s3.cat(a)
     assert len(data) == 10 * 2**20 + len(b"extra") + 10 * 2**20
     assert data[10 * 2**20 : 10 * 2**20 + 5] == b"extra"
