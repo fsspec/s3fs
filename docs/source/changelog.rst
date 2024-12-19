@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2024.12.0
+---------
+
+- CI fixes (#922)
+- smaller threshold for copy_managed (#921)
+- exclusive write (#917)
+- fix bug in _find (#913)
+- parse query without upstream infer_storage_options (#912)
+- bug in _upload_file_part_concurrent (#910)
+
 2024.10.0
 ---------
 
