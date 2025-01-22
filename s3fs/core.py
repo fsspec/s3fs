@@ -213,7 +213,7 @@ class S3FileSystem(AsyncFileSystem):
         If RequesterPays buckets are supported.
     default_block_size: int (None)
         If given, the default block size value used for ``open()``, if no
-        specific value is given at all time. The built-in default is 5MB.
+        specific value is given at all time. The built-in default is 50MB.
     default_fill_cache : Bool (True)
         Whether to use cache filling with open by default. Refer to
         ``S3File.open``.
