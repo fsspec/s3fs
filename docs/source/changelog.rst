@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2025.2.0
+--------
+
+- update docstrings to new default values (#934)
+- fix CI (#936)
+
 2024.12.0
 ---------
 
