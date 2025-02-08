@@ -38,19 +38,21 @@ class S3BucketRegionCache:
         try:
             response = await general_client.head_bucket(Bucket=bucket_name)
         except ClientError as e:
-            region = (
-                e.response["ResponseMetadata"]
-                .get("HTTPHeaders", {})
-                .get("x-amz-bucket-region")
+            logger.debug("RC: HEAD_BUCKET call for %r has failed", bucket_name)
+            response = e.response
+
+        region = (
+            response["ResponseMetadata"]
+            .get("HTTPHeaders", {})
+            .get("x-amz-bucket-region")
+        )
+
+        if not region:
+            logger.debug(
+                "RC: No region in HEAD_BUCKET call response for %r, returning the general client",
+                bucket_name,
             )
-            if not region:
-                logger.debug(
-                    "RC: HEAD_BUCKET call for %r has failed, returning the general client",
-                    bucket_name,
-                )
-                return general_client
-        else:
-            region = response["ResponseMetadata"]["HTTPHeaders"]["x-amz-bucket-region"]
+            return general_client
 
         if region not in self._regions:
             logger.debug(
