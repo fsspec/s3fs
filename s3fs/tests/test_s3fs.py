@@ -247,8 +247,11 @@ def test_user_session_is_preserved():
 
 
 def test_idempotent_connect(s3):
-    first = s3.s3
-    assert s3.connect(refresh=True) is not first
+    stale_s3 = s3.s3
+    stale_session = s3.session
+    s3.connect(refresh=True)
+    assert stale_s3 is not s3.s3
+    assert stale_session is not s3.session
 
 
 def test_multiple_objects(s3):

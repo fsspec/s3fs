@@ -480,9 +480,30 @@ class S3FileSystem(AsyncFileSystem):
 
     async def set_session(self, refresh=False, kwargs={}):
         """Establish S3 connection object.
+
+        This async method is called by any operation on an ``S3FileSystem`` instance.
+        The ``refresh=True`` argument is useful if new credentials have been created
+        and the instance needs to be reestablished. ``connect`` is a blocking
+        version of ``set_session``.
+
+        Parameters
+        ----------
+        refresh : bool (False)
+            If True, create a new session even if one already exists.
+        kwargs : dict
+            Currently unused.
+
         Returns
         -------
         Session to be closed later with await .close()
+
+        Examples
+        --------
+        >>> s3 = S3FileSystem(profile="<profile name>")  # doctest: +SKIP
+        # use in an async coroutine to assign the client object to a local variable
+        >>> await s3.set_session()  # doctest: +SKIP
+        # blocking version of set_session
+        >>> s3.connect(refresh=True)  # doctest: +SKIP
         """
         if self._s3 is not None and not refresh:
             return self._s3
@@ -522,7 +543,7 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["signature_version"] = UNSIGNED
 
         conf = AioConfig(**config_kwargs)
-        if self.session is None:
+        if self.session is None or refresh:
             self.session = aiobotocore.session.AioSession(**self.kwargs)
 
         for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
