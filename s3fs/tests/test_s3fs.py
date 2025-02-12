@@ -269,7 +269,7 @@ def test_info(s3):
     info.pop("ContentType")
     linfo.pop("Key")
     linfo.pop("Size")
-    linfo.pop("ChecksumAlgorithm")
+    linfo.pop("ChecksumAlgorithm", None)  # field DNE in some S3-compatible providers
     assert info == linfo
     parent = a.rsplit("/", 1)[0]
     s3.invalidate_cache()  # remove full path from the cache
