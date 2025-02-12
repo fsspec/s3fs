@@ -16,8 +16,20 @@ class TestS3fsPut(abstract.AbstractPutTests, S3fsFixtures):
     pass
 
 
+def botocore_too_old():
+    import botocore
+    from packaging.version import parse
+
+    MIN_BOTOCORE_VERSION = "1.33.2"
+
+    return parse(botocore.__version__) < parse(MIN_BOTOCORE_VERSION)
+
+
 class TestS3fsPipe(abstract.AbstractPipeTests, S3fsFixtures):
-    pass
+
+    test_pipe_exclusive = pytest.mark.skipif(
+        botocore_too_old(), reason="Older botocore doesn't support exclusive writes"
+    )(abstract.AbstractPipeTests.test_pipe_exclusive)
 
 
 class TestS3fsOpen(abstract.AbstractOpenTests, S3fsFixtures):
