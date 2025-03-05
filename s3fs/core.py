@@ -1136,7 +1136,7 @@ class S3FileSystem(AsyncFileSystem):
 
     touch = sync_wrapper(_touch)
 
-    async def _cat_file(self, path, version_id=None, start=None, end=None):
+    async def _cat_file(self, path, version_id=None, start=None, end=None, **kwargs):
         bucket, key, vers = self.split_path(path)
         if start is not None or end is not None:
             head = {"Range": await self._process_limits(path, start, end)}
@@ -1151,6 +1151,7 @@ class S3FileSystem(AsyncFileSystem):
                 **version_id_kw(version_id or vers),
                 **head,
                 **self.req_kw,
+                **kwargs,
             )
             try:
                 return await resp["Body"].read()
