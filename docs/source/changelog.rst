@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2025.3.0
+--------
+
+- recreate sessino object on refresh (#939)
+- re-enable CI tests (#940)
+
 2025.2.0
 --------
 
