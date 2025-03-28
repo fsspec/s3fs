@@ -587,7 +587,7 @@ class S3FileSystem(AsyncFileSystem):
     def close_session(loop, s3):
         if loop is not None and loop.is_running():
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 loop.create_task(s3.__aexit__(None, None, None))
                 return
             except RuntimeError:
