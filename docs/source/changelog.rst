@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2025.3.1
+--------
+
+- get_event_loop -> get_running_loop at shutdown (#954)
+
 2025.3.0
 --------
 

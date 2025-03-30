@@ -2880,6 +2880,14 @@ async def test_invalidate_cache(s3: s3fs.S3FileSystem) -> None:
     assert sorted(after) == ["test/a/b.txt", "test/a/c.txt"]
 
 
+def test_exist_after_delete(s3):
+    test_dir = f"{test_bucket_name}/test/checkpoint_dir"
+    s3.touch(f"{test_dir}/file.txt")
+    assert s3.exists(test_dir)
+    s3.rm(test_dir, recursive=True)
+    assert not s3.exists(test_dir)
+
+
 @pytest.mark.xfail(reason="moto doesn't support conditional MPU")
 def test_pipe_exclusive_big(s3):
     chunksize = 5 * 2**20  # minimum allowed
