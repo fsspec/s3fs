@@ -2696,11 +2696,12 @@ def test_get_directory_recursive(s3, tmpdir):
         assert target_fs.find(target) == [os.path.join(target, "file")]
 
 
-def test_put_directory_recursive(s3, tmpdir):
+def test_put_directory_recursive(s3, tmpdir, request_count):
     src = os.path.join(tmpdir, "src")
-    src_file = os.path.join(src, "file")
+    deep_src_path = os.path.join(src, "very", "deep")
+    src_file = os.path.join(deep_src_path, "file")
     source_fs = fsspec.filesystem("file")
-    source_fs.mkdir(src)
+    source_fs.mkdir(deep_src_path)
     source_fs.touch(src_file)
 
     target = test_bucket_name + "/target"
@@ -2712,18 +2713,42 @@ def test_put_directory_recursive(s3, tmpdir):
         assert s3.isdir(target)
 
         if loop == 0:
-            assert s3.find(target) == [target + "/file"]
+            assert s3.find(target) == [target + "/very/deep/file"]
         else:
-            assert sorted(s3.find(target)) == [target + "/file", target + "/src/file"]
+            assert sorted(s3.find(target)) == [target + "/src/very/deep/file", target + "/very/deep/file"]
 
     s3.rm(target, recursive=True)
 
     # put with slash
     assert not s3.exists(target)
+
+
     for loop in range(2):
+        s3.dircache.clear()
+        request_count.clear()
+
         s3.put(src + "/", target, recursive=True)
+
+        assert request_count.get("PutObject", 0) == 1
+        assert request_count.get("ListObjectsV2", 0) <= 1
+
         assert s3.isdir(target)
-        assert s3.find(target) == [target + "/file"]
+        assert s3.find(target) == [target + "/very/deep/file"]
+
+
+@pytest.fixture()
+def request_count(s3):
+    count = {}
+
+    def count_requests(request, operation_name, **kwargs):
+        nonlocal count
+        count[operation_name] = count.get(operation_name, 0) + 1
+
+    s3.s3.meta.events.register("request-created.s3", count_requests)
+
+    yield count
+
+    s3.s3.meta.events.unregister("request-created.s3", count_requests)
 
 
 def test_cp_two_files(s3):
