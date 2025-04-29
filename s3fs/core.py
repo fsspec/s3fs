@@ -1105,7 +1105,7 @@ class S3FileSystem(AsyncFileSystem):
                 pass
             try:
                 await self._call_s3(
-                    "list_objects_v2", MaxKeys=1, Bucket=bucket, **self.req_kw
+                    "head_bucket", Bucket=bucket, **self.req_kw
                 )
                 return True
             except Exception:
