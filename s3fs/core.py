@@ -1104,9 +1104,7 @@ class S3FileSystem(AsyncFileSystem):
                 # might still be a bucket we can access but don't own
                 pass
             try:
-                await self._call_s3(
-                    "head_bucket", Bucket=bucket, **self.req_kw
-                )
+                await self._call_s3("head_bucket", Bucket=bucket, **self.req_kw)
                 return True
             except Exception:
                 pass
