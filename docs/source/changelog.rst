@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2025.5.0
+--------
+
+- simpler requirements syntax (#958)
+- use head_bucket for info(bucket) (#961)
+
 2025.3.2
 --------
 
