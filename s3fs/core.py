@@ -48,7 +48,6 @@ logger = logging.getLogger("s3fs")
 
 
 def setup_logging(level=None):
-
     setup_logger(logger=logger, level=(level or os.environ["S3FS_LOGGING_LEVEL"]))
 
 
@@ -165,8 +164,9 @@ def _coalesce_version_id(*args):
         version_ids.remove(None)
     if len(version_ids) > 1:
         raise ValueError(
-            "Cannot coalesce version_ids where more than one are defined,"
-            " {}".format(version_ids)
+            "Cannot coalesce version_ids where more than one are defined, {}".format(
+                version_ids
+            )
         )
     elif len(version_ids) == 0:
         return None
@@ -710,8 +710,7 @@ class S3FileSystem(AsyncFileSystem):
         kw.update(kwargs)
         if not self.version_aware and version_id:
             raise ValueError(
-                "version_id cannot be specified if the filesystem "
-                "is not version aware"
+                "version_id cannot be specified if the filesystem is not version aware"
             )
 
         if cache_type is None:
@@ -1186,7 +1185,6 @@ class S3FileSystem(AsyncFileSystem):
             self.invalidate_cache(path)
             return out
         else:
-
             mpu = await self._call_s3(
                 "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
             )
@@ -1266,7 +1264,6 @@ class S3FileSystem(AsyncFileSystem):
                 )
                 callback.relative_update(size)
             else:
-
                 mpu = await self._call_s3(
                     "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
                 )
@@ -2161,7 +2158,7 @@ class S3FileSystem(AsyncFileSystem):
     async def open_async(self, path, mode="rb", **kwargs):
         if "b" not in mode or kwargs.get("compression"):
             raise ValueError
-        return S3AsyncStreamedFile(self, path, mode)
+        return S3AsyncStreamedFile(self, path, mode, **kwargs)
 
 
 class S3File(AbstractBufferedFile):
@@ -2515,19 +2512,28 @@ class S3File(AbstractBufferedFile):
 
 
 class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
-    def __init__(self, fs, path, mode):
+    def __init__(self, fs, path, mode, **kwargs):
         self.fs = fs
         self.path = path
         self.mode = mode
         self.r = None
-        self.loc = 0
-        self.size = None
+        self.loc = kwargs.get("loc", 0)
+        self.size = kwargs.get("size", None)
 
     async def read(self, length=-1):
         if self.r is None:
-            bucket, key, gen = self.fs.split_path(self.path)
-            r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
-            self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
+            bucket, key, _ = self.fs.split_path(self.path)
+            if self.size is None:
+                r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
+                self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
+            else:
+                r = await self.fs._call_s3(
+                    "get_object",
+                    Bucket=bucket,
+                    Key=key,
+                    Range="bytes=%i-%i" % (self.loc, self.loc + self.size - 1),
+                )
+
             self.r = r["Body"]
         out = await self.r.read(length)
         self.loc += len(out)
