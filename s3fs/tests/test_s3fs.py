@@ -18,6 +18,7 @@ from itertools import chain
 import fsspec.core
 from dateutil.tz import tzutc
 
+import botocore
 import s3fs.core
 from s3fs.core import S3FileSystem
 from s3fs.utils import ignoring, SSEParams
@@ -2888,6 +2889,11 @@ def test_exist_after_delete(s3):
     assert not s3.exists(test_dir)
 
 
+# condition: True if running on botocore < 1.33.0
+# The below tests for exclusive writes 
+old_botocore = version.parse(botocore.__version__) < version.parse("1.33.0")
+
+
 @pytest.mark.xfail(reason="moto doesn't support IfNoneMatch for MPU when object created via MPU")
 def test_pipe_exclusive_big(s3):
     chunksize = 5 * 2**20  # minimum allowed
@@ -2899,6 +2905,7 @@ def test_pipe_exclusive_big(s3):
     assert not s3.list_multipart_uploads(test_bucket_name)
 
 
+@pytest.mark.xfail(old_botocore, reason="botocore<1.33.0 lacks IfNoneMatch support", strict=True)
 def test_pipe_exclusive_big_after_small(s3):
     """Test conditional MPU after creating object via put_object
     
@@ -2933,6 +2940,7 @@ def test_put_exclusive_big(s3, tmpdir):
     assert not s3.list_multipart_uploads(test_bucket_name)
 
 
+@pytest.mark.xfail(old_botocore, reason="botocore<1.33.0 lacks IfNoneMatch support", strict=True)
 def test_put_exclusive_big_after_small(s3, tmpdir):
     """Test conditional MPU after creating object via put_object.
     
@@ -2955,6 +2963,7 @@ def test_put_exclusive_big_after_small(s3, tmpdir):
     assert not s3.list_multipart_uploads(test_bucket_name)
 
 
+@pytest.mark.xfail(old_botocore, reason="botocore<1.33.0 lacks IfNoneMatch support", strict=True)
 def test_put_exclusive_small(s3, tmpdir):
     fn = f"{tmpdir}/afile"
     with open(fn, "wb") as f:
