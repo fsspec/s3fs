@@ -2458,6 +2458,7 @@ class S3File(AbstractBufferedFile):
 
     def commit(self):
         logger.debug("Commit %s" % self)
+        match = {"IfNoneMatch": "*"} if "x" in self.mode else {}
         if self.tell() == 0:
             if self.buffer is not None:
                 logger.debug("Empty file committed %s" % self)
@@ -2471,15 +2472,11 @@ class S3File(AbstractBufferedFile):
                 kw = dict(Key=self.key, Bucket=self.bucket, Body=data, **self.kwargs)
                 if self.acl:
                     kw["ACL"] = self.acl
-                write_result = self._call_s3("put_object", **kw)
+                write_result = self._call_s3("put_object", **kw, **match)
             else:
                 raise RuntimeError
         else:
             logger.debug("Complete multi-part upload for %s " % self)
-            if "x" in self.mode:
-                match = {"IfNoneMatch": "*"}
-            else:
-                match = {}
             part_info = {"Parts": self.parts}
             write_result = self._call_s3(
                 "complete_multipart_upload",
