@@ -2889,9 +2889,9 @@ def test_exist_after_delete(s3):
     assert not s3.exists(test_dir)
 
 
-# condition: True if running on botocore < 1.33.0
-# The below tests for exclusive writes
-old_botocore = version.parse(botocore.__version__) < version.parse("1.33.0")
+# condition: True if running on botocore < 1.36.0
+# The below tests for exclusive writes will fail on older versions of botocore.
+old_botocore = version.parse(botocore.__version__) < version.parse("1.36.0")
 
 
 @pytest.mark.xfail(
