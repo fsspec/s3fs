@@ -39,5 +39,7 @@ setup(
         "awscli": [f"aiobotocore[awscli]{aiobotocore_version_suffix}"],
         "boto3": [f"aiobotocore[boto3]{aiobotocore_version_suffix}"],
     },
+    long_description="README.md",
+    long_description_content_type="text/markdown",
     zip_safe=False,
 )
