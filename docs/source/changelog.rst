@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2025.7.0
+--------
+
+- fix exclusive write for small files (#974)
+- acknowledge Anaconda support (#972)
+- fix test typo (#970)
+
 2025.5.1
 --------
 
