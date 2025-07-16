@@ -2773,6 +2773,34 @@ def test_async_stream(s3_base):
     assert b"".join(out) == data
 
 
+def test_async_stream_partial(s3_base):
+    fn = test_bucket_name + "/target"
+    data = b"hello world" * 1000
+    out = []
+
+    async def read_stream():
+        fs = S3FileSystem(
+            anon=False,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        await fs._mkdir(test_bucket_name)
+        await fs._pipe(fn, data)
+        f = await fs.open_async(fn, mode="rb", loc=0, size=len(data) // 2)
+
+        while True:
+            got = await f.read(1000)
+            assert f.size == len(data) // 2
+            assert f.tell()
+            if not got:
+                break
+            out.append(got)
+
+    asyncio.run(read_stream())
+    assert len(b"".join(out)) == len(data) // 2
+    assert b"".join(out) == data[: len(data) // 2]
+
+
 def test_rm_invalidates_cache(s3):
     # Issue 761: rm_file does not invalidate cache
     fn = test_bucket_name + "/2014-01-01.csv"
