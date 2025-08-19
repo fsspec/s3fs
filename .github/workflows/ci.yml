@@ -39,13 +39,12 @@ jobs:
         run: |
           pip install git+https://github.com/fsspec/filesystem_spec
           pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}"
-          pip install --upgrade "botocore" --no-deps
           pip install . --no-deps
           pip list
 
       - name: Run Tests
         shell: bash -l {0}
-        run: pytest -vv -s s3fs -k test_write_blocks
+        run: pytest -vv -s s3fs
 
 
   pre-commit:

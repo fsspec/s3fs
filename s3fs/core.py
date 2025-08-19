@@ -213,7 +213,7 @@ class S3FileSystem(AsyncFileSystem):
         If RequesterPays buckets are supported.
     default_block_size: int (None)
         If given, the default block size value used for ``open()``, if no
-        specific value is given at all time. The built-in default is 5MB.
+        specific value is given at all time. The built-in default is 50MB.
     default_fill_cache : Bool (True)
         Whether to use cache filling with open by default. Refer to
         ``S3File.open``.
@@ -241,9 +241,9 @@ class S3FileSystem(AsyncFileSystem):
     session : aiobotocore AioSession object to be used for all connections.
          This session will be used inplace of creating a new session inside S3FileSystem.
          For example: aiobotocore.session.AioSession(profile='test_user')
-    max_concurrency : int (1)
+    max_concurrency : int (10)
         The maximum number of concurrent transfers to use per file for multipart
-        upload (``put()``) operations. Defaults to 1 (sequential). When used in
+        upload (``put()``) operations. Defaults to 10. When used in
         conjunction with ``S3FileSystem.put(batch_size=...)`` the maximum number of
         simultaneous connections is ``max_concurrency * batch_size``. We may extend
         this parameter to affect ``pipe()``, ``cat()`` and ``get()``. Increasing this
@@ -480,9 +480,30 @@ class S3FileSystem(AsyncFileSystem):
 
     async def set_session(self, refresh=False, kwargs={}):
         """Establish S3 connection object.
+
+        This async method is called by any operation on an ``S3FileSystem`` instance.
+        The ``refresh=True`` argument is useful if new credentials have been created
+        and the instance needs to be reestablished. ``connect`` is a blocking
+        version of ``set_session``.
+
+        Parameters
+        ----------
+        refresh : bool (False)
+            If True, create a new session even if one already exists.
+        kwargs : dict
+            Currently unused.
+
         Returns
         -------
         Session to be closed later with await .close()
+
+        Examples
+        --------
+        >>> s3 = S3FileSystem(profile="<profile name>")  # doctest: +SKIP
+        # use in an async coroutine to assign the client object to a local variable
+        >>> await s3.set_session()  # doctest: +SKIP
+        # blocking version of set_session
+        >>> s3.connect(refresh=True)  # doctest: +SKIP
         """
         if self._s3 is not None and not refresh:
             return self._s3
@@ -522,7 +543,7 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["signature_version"] = UNSIGNED
 
         conf = AioConfig(**config_kwargs)
-        if self.session is None:
+        if self.session is None or refresh:
             self.session = aiobotocore.session.AioSession(**self.kwargs)
 
         for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
@@ -566,7 +587,7 @@ class S3FileSystem(AsyncFileSystem):
     def close_session(loop, s3):
         if loop is not None and loop.is_running():
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 loop.create_task(s3.__aexit__(None, None, None))
                 return
             except RuntimeError:
@@ -1083,9 +1104,7 @@ class S3FileSystem(AsyncFileSystem):
                 # might still be a bucket we can access but don't own
                 pass
             try:
-                await self._call_s3(
-                    "list_objects_v2", MaxKeys=1, Bucket=bucket, **self.req_kw
-                )
+                await self._call_s3("head_bucket", Bucket=bucket, **self.req_kw)
                 return True
             except Exception:
                 pass
@@ -2439,6 +2458,7 @@ class S3File(AbstractBufferedFile):
 
     def commit(self):
         logger.debug("Commit %s" % self)
+        match = {"IfNoneMatch": "*"} if "x" in self.mode else {}
         if self.tell() == 0:
             if self.buffer is not None:
                 logger.debug("Empty file committed %s" % self)
@@ -2452,15 +2472,11 @@ class S3File(AbstractBufferedFile):
                 kw = dict(Key=self.key, Bucket=self.bucket, Body=data, **self.kwargs)
                 if self.acl:
                     kw["ACL"] = self.acl
-                write_result = self._call_s3("put_object", **kw)
+                write_result = self._call_s3("put_object", **kw, **match)
             else:
                 raise RuntimeError
         else:
             logger.debug("Complete multi-part upload for %s " % self)
-            if "x" in self.mode:
-                match = {"IfNoneMatch": "*"}
-            else:
-                match = {}
             part_info = {"Parts": self.parts}
             write_result = self._call_s3(
                 "complete_multipart_upload",

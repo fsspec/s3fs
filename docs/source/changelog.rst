@@ -1,6 +1,46 @@
 Changelog
 =========
 
+2025.7.0
+--------
+
+- fix exclusive write for small files (#974)
+- acknowledge Anaconda support (#972)
+- fix test typo (#970)
+
+2025.5.1
+--------
+
+no changes
+
+2025.5.0
+--------
+
+- simpler requirements syntax (#958)
+- use head_bucket for info(bucket) (#961)
+
+2025.3.2
+--------
+
+no changes
+
+2025.3.1
+--------
+
+- get_event_loop -> get_running_loop at shutdown (#954)
+
+2025.3.0
+--------
+
+- recreate sessino object on refresh (#939)
+- re-enable CI tests (#940)
+
+2025.2.0
+--------
+
+- update docstrings to new default values (#934)
+- fix CI (#936)
+
 2024.12.0
 ---------
 
