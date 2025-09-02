@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2025.9.0
+--------
+
+- update README for distribution compliance
+
 2025.7.0
 --------
 
