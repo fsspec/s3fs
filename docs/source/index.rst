@@ -340,6 +340,7 @@ Contents
    development
    api
    changelog
+   code-of-conduct
    :maxdepth: 2
 
 
