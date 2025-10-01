@@ -1464,6 +1464,18 @@ class S3FileSystem(AsyncFileSystem):
                 pass
             except ClientError as e:
                 raise translate_boto_error(e, set_cause=False)
+        else:
+            try:
+                out = await self._call_s3("head_bucket", Bucket=bucket, **self.req_kw)
+                return {
+                    "name": bucket,
+                    "type": "directory",
+                    "size": 0,
+                    "StorageClass": "DIRECTORY",
+                    "VersionId": out.get("VersionId"),
+                }
+            except ClientError as e:
+                raise translate_boto_error(e, set_cause=False)
 
         try:
             # We check to see if the path is a directory by attempting to list its
