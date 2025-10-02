@@ -103,7 +103,7 @@ def get_boto3_client():
 
     # NB: we use the sync botocore client for setup
     session = Session()
-    return session.create_client("s3", endpoint_url=endpoint_uri)
+    return session.create_client("s3", endpoint_url=endpoint_uri, region_name="us-east-1")
 
 
 @pytest.fixture()
