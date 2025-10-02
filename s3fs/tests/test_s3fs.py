@@ -2986,3 +2986,10 @@ def test_put_exclusive_small(s3, tmpdir):
     with pytest.raises(FileExistsError):
         s3.put(fn, f"{test_bucket_name}/afile", mode="create")
     assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+def test_bucket_info(s3):
+    info = s3.info(test_bucket_name)
+    assert "VersionId" in info
+    assert info["type"] == "directory"
+    assert info["name"] == test_bucket_name
