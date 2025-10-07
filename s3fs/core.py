@@ -912,7 +912,10 @@ class S3FileSystem(AsyncFileSystem):
         # Explicitly add directories to their parents in the dircache
         for d in dirs:
             par = self._parent(d["name"])
-            if par in thisdircache:
+            # extra condition here (in any()) to deal with director-marking files
+            if par in thisdircache and not any(
+                _["name"] == d["name"] for _ in thisdircache[par]
+            ):
                 thisdircache[par].append(d)
 
         if not prefix:
