@@ -2993,3 +2993,28 @@ def test_bucket_info(s3):
     assert "VersionId" in info
     assert info["type"] == "directory"
     assert info["name"] == test_bucket_name
+
+
+def test_find_ls_fail(s3):
+    # beacuse of https://github.com/fsspec/s3fs/pull/989
+    client = get_boto3_client()
+    files = {
+        f"{test_bucket_name}/find/a/a": b"data",
+        f"{test_bucket_name}/find/a/b": b"data",
+        f"{test_bucket_name}/find/a": b"",  # placeholder without "/"
+        f"{test_bucket_name}/find/b": b"",  # empty placeholder without "/"
+        f"{test_bucket_name}/find/c/c": b"data",  # directory with no placeholder
+        f"{test_bucket_name}/find/d/d": b"data",  # dir will acquire placeholder with "/"
+    }
+    client.put_object(Bucket=test_bucket_name, Key="find/d/", Body=b"")
+    s3.pipe(files)
+
+    out0 = s3.ls(f"{test_bucket_name}/find", detail=True)
+    s3.find(test_bucket_name, detail=False)
+    out = s3.ls(f"{test_bucket_name}/find", detail=True)
+    assert out == out0
+
+    s3.invalidate_cache()
+    s3.find(f"{test_bucket_name}/find", detail=False)
+    out = s3.ls(f"{test_bucket_name}/find", detail=True)
+    assert out == out0
