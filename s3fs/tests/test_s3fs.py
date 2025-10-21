@@ -3001,8 +3001,8 @@ def test_find_ls_fail(s3):
     files = {
         f"{test_bucket_name}/find/a/a": b"data",
         f"{test_bucket_name}/find/a/b": b"data",
-        f"{test_bucket_name}/find/a": b"",  # placeholder without "/"
-        f"{test_bucket_name}/find/b": b"",  # empty placeholder without "/"
+        f"{test_bucket_name}/find/a": b"",  # duplicate of dir, without "/"
+        f"{test_bucket_name}/find/b": b"",  # empty file without "/" and no children
         f"{test_bucket_name}/find/c/c": b"data",  # directory with no placeholder
         f"{test_bucket_name}/find/d/d": b"data",  # dir will acquire placeholder with "/"
     }
