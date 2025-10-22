@@ -888,7 +888,8 @@ class S3FileSystem(AsyncFileSystem):
         sdirs = set()
         thisdircache = {}
         for o in out:
-            par = self._parent(o["name"])
+            # not self._parent, because that strips "/" from placeholders
+            par = o["name"].rsplit("/", maxsplit=1)[0]
             o["Key"] = o["name"]
             if par not in sdirs:
                 sdirs.add(par)
@@ -909,7 +910,7 @@ class S3FileSystem(AsyncFileSystem):
                     if d and d not in thisdircache[ppar]:
                         thisdircache[ppar].append(d)
             if par in sdirs and not o["name"].endswith("/"):
-                # exlucde placeholdees, they do not belong int he directory listing
+                # exclude placeholdees, they do not belong in the directory listing
                 thisdircache[par].append(o)
 
         # Explicitly add directories to their parents in the dircache
