@@ -3007,6 +3007,9 @@ def test_find_ls_fail(s3):
         f"{test_bucket_name}/find/d/d": b"data",  # dir will acquire placeholder with "/"
     }
     client.put_object(Bucket=test_bucket_name, Key="find/d/", Body=b"")
+    client.put_object(
+        Bucket=test_bucket_name, Key="find/e/", Body=b""
+    )  # placeholder only
     s3.pipe(files)
 
     out0 = s3.ls(f"{test_bucket_name}/find", detail=True)
