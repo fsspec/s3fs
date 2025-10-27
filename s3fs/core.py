@@ -764,6 +764,7 @@ class S3FileSystem(AsyncFileSystem):
                     else:
                         files.append(c)
                 files += dirs
+                files.sort(key=lambda f: f["name"])
             except ClientError as e:
                 raise translate_boto_error(e)
 
@@ -887,13 +888,15 @@ class S3FileSystem(AsyncFileSystem):
         sdirs = set()
         thisdircache = {}
         for o in out:
-            par = self._parent(o["name"])
+            # not self._parent, because that strips "/" from placeholders
+            par = o["name"].rsplit("/", maxsplit=1)[0]
+            o["Key"] = o["name"]
             if par not in sdirs:
                 sdirs.add(par)
                 d = False
                 if len(path) <= len(par):
                     d = {
-                        "Key": self.split_path(par)[1],
+                        "Key": par,
                         "Size": 0,
                         "name": par,
                         "StorageClass": "DIRECTORY",
@@ -906,19 +909,23 @@ class S3FileSystem(AsyncFileSystem):
                 if ppar in thisdircache:
                     if d and d not in thisdircache[ppar]:
                         thisdircache[ppar].append(d)
-            if par in sdirs:
+            if par in sdirs and not o["name"].endswith("/"):
+                # exclude placeholdees, they do not belong in the directory listing
                 thisdircache[par].append(o)
 
         # Explicitly add directories to their parents in the dircache
         for d in dirs:
             par = self._parent(d["name"])
-            if par in thisdircache:
+            # extra condition here (in any()) to deal with director-marking files
+            if par in thisdircache and not any(
+                _["name"] == d["name"] for _ in thisdircache[par]
+            ):
                 thisdircache[par].append(d)
 
         if not prefix:
             for k, v in thisdircache.items():
                 if k not in self.dircache and len(k) >= len(path):
-                    self.dircache[k] = v
+                    self.dircache[k] = sorted(v, key=lambda x: x["name"])
         if withdirs:
             out = sorted(out + dirs, key=lambda x: x["name"])
         if detail:
