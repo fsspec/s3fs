@@ -3,6 +3,7 @@ import asyncio
 import errno
 import io
 import logging
+import math
 import mimetypes
 import os
 import socket
@@ -68,6 +69,8 @@ S3_RETRYABLE_ERRORS = (
     FSTimeoutError,
     ResponseParserError,
 )
+
+MAX_UPLOAD_PARTS = 10_000  # maximum number of parts for S3 multipart upload
 
 if ClientPayloadError is not None:
     S3_RETRYABLE_ERRORS += (ClientPayloadError,)
@@ -1230,7 +1233,7 @@ class S3FileSystem(AsyncFileSystem):
         lpath,
         rpath,
         callback=_DEFAULT_CALLBACK,
-        chunksize=50 * 2**20,
+        chunksize=None,
         max_concurrency=None,
         mode="overwrite",
         **kwargs,
@@ -1258,6 +1261,15 @@ class S3FileSystem(AsyncFileSystem):
             if content_type is not None:
                 kwargs["ContentType"] = content_type
 
+        if chunksize is None:
+            chunksize = 50 * 2**20  # default chunksize set to 50 MiB
+            required_chunks = math.ceil(size / chunksize)
+            # increase chunksize to fit within the MAX_UPLOAD_PARTS limit
+            if required_chunks > MAX_UPLOAD_PARTS:
+                # S3 supports uploading objects up to 5 TiB in size,
+                # so each chunk can be up to ~524 MiB.
+                chunksize = math.ceil(size / MAX_UPLOAD_PARTS)
+
         with open(lpath, "rb") as f0:
             if size < min(5 * 2**30, 2 * chunksize):
                 chunk = f0.read()
@@ -1276,8 +1288,8 @@ class S3FileSystem(AsyncFileSystem):
                         key,
                         mpu,
                         f0,
+                        chunksize,
                         callback=callback,
-                        chunksize=chunksize,
                         max_concurrency=max_concurrency,
                     )
                     parts = [
@@ -1305,8 +1317,8 @@ class S3FileSystem(AsyncFileSystem):
         key,
         mpu,
         f0,
+        chunksize,
         callback=_DEFAULT_CALLBACK,
-        chunksize=50 * 2**20,
         max_concurrency=None,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
