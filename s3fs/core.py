@@ -891,32 +891,37 @@ class S3FileSystem(AsyncFileSystem):
             # not self._parent, because that strips "/" from placeholders
             par = o["name"].rsplit("/", maxsplit=1)[0]
             o["Key"] = o["name"]
-            if par not in sdirs:
-                sdirs.add(par)
-                d = False
-                if len(path) <= len(par):
-                    d = {
-                        "Key": par,
-                        "Size": 0,
-                        "name": par,
-                        "StorageClass": "DIRECTORY",
-                        "type": "directory",
-                        "size": 0,
-                    }
-                    dirs.append(d)
-                thisdircache[par] = []
-                ppar = self._parent(par)
-                if ppar in thisdircache:
-                    if d and d not in thisdircache[ppar]:
-                        thisdircache[ppar].append(d)
-            if par in sdirs and not o["name"].endswith("/"):
-                # exclude placeholdees, they do not belong in the directory listing
-                thisdircache[par].append(o)
+            name = o["name"]
+            while "/" in par:
+                if par not in sdirs:
+                    sdirs.add(par)
+                    d = False
+                    if len(path) <= len(par):
+                        d = {
+                            "Key": par,
+                            "Size": 0,
+                            "name": par,
+                            "StorageClass": "DIRECTORY",
+                            "type": "directory",
+                            "size": 0,
+                        }
+                        dirs.append(d)
+                    thisdircache[par] = []
+                    ppar = self._parent(par)
+                    if ppar in thisdircache:
+                        if d and d not in thisdircache[ppar]:
+                            thisdircache[ppar].append(d)
+                if par in sdirs and not name.endswith("/"):
+                    # exclude placeholdees, they do not belong in the directory listing
+                    thisdircache[par].append(o)
+                par, name, o = par.rsplit("/", maxsplit=1)[0], par, d
+                if par in thisdircache or par in self.dircache:
+                    break
 
         # Explicitly add directories to their parents in the dircache
         for d in dirs:
             par = self._parent(d["name"])
-            # extra condition here (in any()) to deal with director-marking files
+            # extra condition here (in any()) to deal with directory-marking files
             if par in thisdircache and not any(
                 _["name"] == d["name"] for _ in thisdircache[par]
             ):

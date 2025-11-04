@@ -2365,7 +2365,7 @@ def test_get_file_info_with_selector(s3):
             pass
 
         infos = fs.find(base_dir, maxdepth=None, withdirs=True, detail=True)
-        assert len(infos) == 5  # includes base_dir directory
+        assert len(infos) == 4  # includes base_dir directory
 
         for info in infos.values():
             if info["name"].endswith(file_a):
