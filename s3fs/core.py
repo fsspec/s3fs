@@ -177,6 +177,18 @@ def _coalesce_version_id(*args):
         return version_ids.pop()
 
 
+def calculate_chunksize(filesize, chunksize=None, max_parts=MAX_UPLOAD_PARTS) -> int:
+    if chunksize is None:
+        chunksize = 50 * 2**20  # default chunksize set to 50 MiB
+        required_chunks = math.ceil(filesize / chunksize)
+        # increase chunksize to fit within the max_parts limit
+        if required_chunks > max_parts:
+            # S3 supports uploading objects up to 5 TiB in size,
+            # so each chunk can be up to ~524 MiB.
+            chunksize = math.ceil(filesize / max_parts)
+    return chunksize
+
+
 class S3FileSystem(AsyncFileSystem):
     """
     Access S3 as if it were a file system.
@@ -1261,15 +1273,7 @@ class S3FileSystem(AsyncFileSystem):
             if content_type is not None:
                 kwargs["ContentType"] = content_type
 
-        if chunksize is None:
-            chunksize = 50 * 2**20  # default chunksize set to 50 MiB
-            required_chunks = math.ceil(size / chunksize)
-            # increase chunksize to fit within the MAX_UPLOAD_PARTS limit
-            if required_chunks > MAX_UPLOAD_PARTS:
-                # S3 supports uploading objects up to 5 TiB in size,
-                # so each chunk can be up to ~524 MiB.
-                chunksize = math.ceil(size / MAX_UPLOAD_PARTS)
-
+        chunksize = calculate_chunksize(size, chunksize=chunksize)
         with open(lpath, "rb") as f0:
             if size < min(5 * 2**30, 2 * chunksize):
                 chunk = f0.read()

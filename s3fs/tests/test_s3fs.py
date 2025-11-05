@@ -20,7 +20,7 @@ from dateutil.tz import tzutc
 
 import botocore
 import s3fs.core
-from s3fs.core import S3FileSystem
+from s3fs.core import MAX_UPLOAD_PARTS, S3FileSystem, calculate_chunksize
 from s3fs.utils import ignoring, SSEParams
 from botocore.exceptions import NoCredentialsError
 from fsspec.asyn import sync
@@ -2993,3 +2993,28 @@ def test_bucket_info(s3):
     assert "VersionId" in info
     assert info["type"] == "directory"
     assert info["name"] == test_bucket_name
+
+
+MB = 2**20
+GB = 2**30
+TB = 2**40
+
+
+@pytest.mark.parametrize(
+    ["filesize", "chunksize", "expected"],
+    [
+        # small file, use default chunksize
+        (1000, None, 50 * MB),
+        # exact boundary, use default chunksize
+        (50 * MB * MAX_UPLOAD_PARTS, None, 50 * MB),
+        # file requiring increased chunksize
+        (50 * MB * (MAX_UPLOAD_PARTS + 1), None, 52_434_043),
+        # very large files, expect increased chunksize
+        (1 * TB, None, 109_951_163),
+        (5 * TB, None, 549_755_814),
+        # respect explicit chunksize
+        (5 * GB, 10 * MB, 10 * MB),
+    ],
+)
+def test_calculate_chunksize(filesize, chunksize, expected):
+    assert calculate_chunksize(filesize, chunksize) == expected
