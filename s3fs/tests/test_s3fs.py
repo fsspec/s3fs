@@ -2365,7 +2365,7 @@ def test_get_file_info_with_selector(s3):
             pass
 
         infos = fs.find(base_dir, maxdepth=None, withdirs=True, detail=True)
-        assert len(infos) == 5  # includes base_dir directory
+        assert len(infos) == 4  # includes base_dir directory
 
         for info in infos.values():
             if info["name"].endswith(file_a):
@@ -3018,3 +3018,56 @@ TB = 2**40
 )
 def test_calculate_chunksize(filesize, chunksize, expected):
     assert calculate_chunksize(filesize, chunksize) == expected
+
+
+def test_find_ls_fail(s3):
+    # beacuse of https://github.com/fsspec/s3fs/pull/989
+    client = get_boto3_client()
+    files = {
+        f"{test_bucket_name}/find/a/a": b"data",
+        f"{test_bucket_name}/find/a/b": b"data",
+        f"{test_bucket_name}/find/a": b"",  # duplicate of dir, without "/"
+        f"{test_bucket_name}/find/b": b"",  # empty file without "/" and no children
+        f"{test_bucket_name}/find/c/c": b"data",  # directory with no placeholder
+        f"{test_bucket_name}/find/d/d": b"data",  # dir will acquire placeholder with "/"
+    }
+    client.put_object(Bucket=test_bucket_name, Key="find/d/", Body=b"")
+    client.put_object(
+        Bucket=test_bucket_name, Key="find/e/", Body=b""
+    )  # placeholder only
+    s3.pipe(files)
+
+    out0 = s3.ls(f"{test_bucket_name}/find", detail=True)
+    s3.find(test_bucket_name, detail=False)
+    out = s3.ls(f"{test_bucket_name}/find", detail=True)
+    assert out == out0
+
+    s3.invalidate_cache()
+    s3.find(f"{test_bucket_name}/find", detail=False)
+    out = s3.ls(f"{test_bucket_name}/find", detail=True)
+    assert out == out0
+
+
+def test_find_missing_ls(s3):
+    # https://github.com/fsspec/s3fs/issues/988#issuecomment-3436727753
+    BUCKET = test_bucket_name
+    BASE_PREFIX = "disappearing-folders/"
+    BASE = f"s3://{BUCKET}/{BASE_PREFIX}"
+
+    s3_with_cache = S3FileSystem(
+        anon=False,
+        use_listings_cache=True,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    s3_no_cache = S3FileSystem(
+        anon=False,
+        use_listings_cache=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+
+    s3_with_cache.pipe({f"{BASE}folder/foo/1.txt": b"", f"{BASE}bar.txt": b""})
+    s3_with_cache.find(BASE)
+    listed_cached = s3_with_cache.ls(BASE, detail=False)
+    listed_no_cache = s3_no_cache.ls(BASE, detail=False)
+
+    assert set(listed_cached) == set(listed_no_cache)
