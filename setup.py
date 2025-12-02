@@ -3,14 +3,6 @@
 from setuptools import setup
 import versioneer
 
-with open("requirements.txt") as file:
-    aiobotocore_version_suffix = ""
-    for line in file:
-        parts = line.rstrip().split("aiobotocore")
-        if len(parts) == 2:
-            aiobotocore_version_suffix = parts[1]
-            break
-
 setup(
     name="s3fs",
     version=versioneer.get_version(),
@@ -35,10 +27,6 @@ setup(
     packages=["s3fs"],
     python_requires=">= 3.10",
     install_requires=[open("requirements.txt").read().strip().split("\n")],
-    extras_require={
-        "awscli": [f"aiobotocore[awscli]{aiobotocore_version_suffix}"],
-        "boto3": [f"aiobotocore[boto3]{aiobotocore_version_suffix}"],
-    },
     long_description="README.md",
     long_description_content_type="text/markdown",
     zip_safe=False,
