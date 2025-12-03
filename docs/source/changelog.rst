@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2025.12.0
+---------
+
+- remove optional dependencies (#995)
+- add support for py3.14 and remove 3.9 (#993)
+- add link docs->repo (#992)
+
 2025.10.0
 ---------
 
