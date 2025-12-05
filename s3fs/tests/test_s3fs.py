@@ -22,6 +22,7 @@ import s3fs.core
 from s3fs.core import MAX_UPLOAD_PARTS, S3FileSystem, calculate_chunksize
 from s3fs.utils import ignoring, SSEParams
 from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import EndpointConnectionError
 from fsspec.asyn import sync
 from fsspec.callbacks import Callback
 from packaging import version
@@ -2594,6 +2595,40 @@ def test_exists_isdir(s3):
     bad_path = "s3://nyc-tlc-asdfasdf/trip data/"
     assert not s3.exists(bad_path)
     assert not s3.isdir(bad_path)
+
+
+def test_exists_raises_on_connection_error():
+    # Ensure that we raise a ConnectionError instead of returning False if we
+    # are not actually able to connect to storage, by setting a fake proxy and
+    # then re-creating the S3FileSystem instance.
+    S3FileSystem.clear_instance_cache()
+    s3 = S3FileSystem(
+        anon=False,
+        skip_instance_cache=True,
+        endpoint_url="https://fakeproxy.127.0.0.1:8080/",
+    )
+    s3.invalidate_cache()
+    with pytest.raises(EndpointConnectionError):
+        s3.exists("this-bucket-does-not-exist/")
+
+
+def test_exists_bucket_nonexistent_or_no_access(caplog):
+    # Ensure that a warning is raised and False is returned if querying a
+    # bucket that might either not exist or be private.
+    # This tests against real AWS, might fail due to network issues.
+    caplog.clear()
+    fs = s3fs.S3FileSystem(key="wrongkey", secret="wrongsecret")
+    assert not fs.exists("s3://this-bucket-might-not-exist/")
+    assert caplog.records[0].levelname == "WARNING"
+    assert "doesn't exist or you don't have access" in caplog.text
+
+
+def test_exists_bucket_nonexistent(s3, caplog):
+    # Ensure that NO warning is raised and False is returned if checking bucket
+    # existance when we have full access.
+    caplog.clear()
+    assert not s3.exists("non_existent_bucket/")
+    assert len(caplog.records) == 0
 
 
 def test_list_del_multipart(s3):
