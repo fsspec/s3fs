@@ -1614,6 +1614,8 @@ class S3FileSystem(AsyncFileSystem):
                 **self.req_kw,
             )
             versions.extend(out["Versions"])
+            if "DeleteMarkers" in out:
+                versions.extend(out["DeleteMarkers"])
             kwargs.update(
                 {
                     "VersionIdMarker": out.get("NextVersionIdMarker", ""),
