@@ -3068,3 +3068,20 @@ def test_find_missing_ls(s3):
     listed_no_cache = s3_no_cache.ls(BASE, detail=False)
 
     assert set(listed_cached) == set(listed_no_cache)
+
+
+def test_session_close():
+    async def run_program(run):
+        s3 = s3fs.S3FileSystem(anon=True, asynchronous=True)
+        session = await s3.set_session()
+        files = await s3._ls(
+            "s3://noaa-hrrr-bdp-pds/hrrr.20140730/conus/"
+        )  # Random open data store
+        print(f"Number of files {len(files)}")
+        await session.close()
+
+    import aiobotocore.httpsession
+
+    aiobotocore.httpsession.AIOHTTPSession
+    asyncio.run(run_program(True))
+    asyncio.run(run_program(False))

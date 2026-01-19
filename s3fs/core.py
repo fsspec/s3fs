@@ -519,7 +519,12 @@ class S3FileSystem(AsyncFileSystem):
         >>> s3.connect(refresh=True)  # doctest: +SKIP
         """
         if self._s3 is not None and not refresh:
-            return self._s3
+            hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
+            if hsess is not None:
+                if all(_.closed for _ in hsess._sessions.values()):
+                    refresh = True
+            if not refresh:
+                return self._s3
         logger.debug("Setting up s3fs instance")
 
         client_kwargs = self.client_kwargs.copy()
