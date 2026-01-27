@@ -3085,3 +3085,14 @@ def test_session_close():
     aiobotocore.httpsession.AIOHTTPSession
     asyncio.run(run_program(True))
     asyncio.run(run_program(False))
+
+
+def test_rm_recursive_prfix(s3):
+    prefix = "logs/"  # must end with "/"
+
+    # Create empty "directory" in S3
+    client = get_boto3_client()
+    client.put_object(Bucket=test_bucket_name, Key=prefix, Body=b"")
+    logs_path = f"s3://{test_bucket_name}/{prefix}"
+    s3.rm(logs_path, recursive=True)
+    assert not s3.isdir(logs_path)
