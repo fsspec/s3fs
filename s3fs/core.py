@@ -470,6 +470,7 @@ class S3FileSystem(AsyncFileSystem):
         >>> split_path("s3://mybucket/path/to/versioned_file?versionId=some_version_id")
         ['mybucket', 'path/to/versioned_file', 'some_version_id']
         """
+        trail = path[len(path.rstrip('/')):]
         path = self._strip_protocol(path)
         path = path.lstrip("/")
         if "/" not in path:
@@ -477,6 +478,7 @@ class S3FileSystem(AsyncFileSystem):
         else:
             bucket, keypart = self._find_bucket_key(path)
             key, _, version_id = keypart.partition("?versionId=")
+            key += trail # restore trailing slashes removed by AbstractFileSystem._strip_protocol
             return (
                 bucket,
                 key,
