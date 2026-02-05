@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2026.2.0
+--------
+
+- add custom error handling (#1003)
+- do delete placeholders with rm(recursive=True) (#1005)
+- force new session if it was explicitly closed (#1002)
+
+
 2026.1.0
 --------
 
