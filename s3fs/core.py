@@ -901,6 +901,8 @@ class S3FileSystem(AsyncFileSystem):
                 self._fill_info(c, bucket, versions=False)
                 yield c
             for c in i.get(contents_key, []):
+                if c["Size"] == 0 and c["Key"] == i.get("Prefix", ""):
+                    continue  # skip an entity that is the current directory
                 if not self.version_aware or c.get("IsLatest") or versions:
                     c["type"] = "file"
                     c["size"] = c["Size"]
