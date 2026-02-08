@@ -1,6 +1,4 @@
-mock; python_version < '3.3'
-moto>=4
-flask
-flask_cors
+moto[server]>=4,<5
 pytest>=4.2.0
 pytest-env
+pre-commit
