@@ -1010,6 +1010,43 @@ def test_get_file_with_kwargs(s3, tmpdir):
 
 
 @pytest.mark.parametrize("size", [2**10, 10 * 2**20])
+def test_get_file_parallel_callback(s3, tmpdir, size):
+    data = os.urandom(size)
+    s3.pipe(test_bucket_name + "/parallel_test", data)
+
+    test_file = str(tmpdir.join("parallel_test"))
+    cb = Callback()
+    s3.get_file(
+        test_bucket_name + "/parallel_test",
+        test_file,
+        callback=cb,
+        max_concurrency=4,
+        chunksize=5 * 2**20,
+    )
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert cb.size == len(data)
+    assert cb.value == cb.size
+
+
+@pytest.mark.parametrize("factor", [1, 5, 6])
+def test_get_file_parallel_integrity(s3, tmpdir, factor):
+    chunksize = 5 * 2**20
+    data = os.urandom(chunksize * factor)
+    s3.pipe(test_bucket_name + "/parallel_integrity", data)
+
+    test_file = str(tmpdir.join("parallel_integrity"))
+    s3.get_file(
+        test_bucket_name + "/parallel_integrity",
+        test_file,
+        max_concurrency=5,
+        chunksize=chunksize,
+    )
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+
+
+@pytest.mark.parametrize("size", [2**10, 10 * 2**20])
 def test_put_file_with_callback(s3, tmpdir, size):
     test_file = str(tmpdir.join("test.json"))
     with open(test_file, "wb") as f:
@@ -1044,6 +1081,20 @@ def test_pipe_cat_big(s3, size):
     data = b"1234567890A" * size
     s3.pipe(test_bucket_name + "/bigfile", data)
     assert s3.cat(test_bucket_name + "/bigfile") == data
+
+
+@pytest.mark.parametrize("factor", [1, 5, 6])
+def test_cat_file_parallel(s3, factor):
+    chunksize = 5 * 2**20
+    data = os.urandom(chunksize * factor)
+    s3.pipe(test_bucket_name + "/cat_parallel", data)
+
+    result = s3.cat_file(
+        test_bucket_name + "/cat_parallel",
+        max_concurrency=5,
+        chunksize=chunksize,
+    )
+    assert result == data
 
 
 def test_errors(s3):
