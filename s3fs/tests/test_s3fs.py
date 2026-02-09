@@ -1083,6 +1083,20 @@ def test_pipe_cat_big(s3, size):
     assert s3.cat(test_bucket_name + "/bigfile") == data
 
 
+@pytest.mark.parametrize("factor", [1, 5, 6])
+def test_cat_file_parallel(s3, factor):
+    chunksize = 5 * 2**20
+    data = os.urandom(chunksize * factor)
+    s3.pipe(test_bucket_name + "/cat_parallel", data)
+
+    result = s3.cat_file(
+        test_bucket_name + "/cat_parallel",
+        max_concurrency=5,
+        chunksize=chunksize,
+    )
+    assert result == data
+
+
 def test_errors(s3):
     with pytest.raises(FileNotFoundError):
         s3.open(test_bucket_name + "/tmp/test/shfoshf", "rb")
