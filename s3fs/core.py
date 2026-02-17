@@ -329,7 +329,8 @@ class S3FileSystem(AsyncFileSystem):
         simultaneous connections is ``max_concurrency * batch_size``.
         Increasing this value will result in higher
         memory usage during multipart transfer operations (by
-        ``max_concurrency * chunksize`` bytes per file).
+       ``max_concurrency * chunksize`` bytes per file), and may result in timeouts on slow
+       networks. Set to 1 if you are having connection issues.
     fixed_upload_size : bool (False)
         Use same chunk size for all parts in multipart upload (last part can be smaller).
         Cloudflare R2 storage requires fixed_upload_size=True for multipart uploads.
