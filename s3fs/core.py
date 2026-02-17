@@ -332,6 +332,10 @@ class S3FileSystem(AsyncFileSystem):
     fixed_upload_size : bool (False)
         Use same chunk size for all parts in multipart upload (last part can be smaller).
         Cloudflare R2 storage requires fixed_upload_size=True for multipart uploads.
+    local_expiry_check : bool (False)
+        Perform expiry checks when using range reads locally instead of having the
+        server perform them. VAST S3 requires local_expiry_check=True because
+        it doesn't support the `If-Match` http header used for expiry check on the server.
 
     The following parameters are passed on to fsspec:
 
@@ -381,6 +385,7 @@ class S3FileSystem(AsyncFileSystem):
         loop=None,
         max_concurrency=10,
         fixed_upload_size: bool = False,
+        local_expiry_check: bool = False,
         **kwargs,
     ):
         if key and username:
@@ -419,6 +424,7 @@ class S3FileSystem(AsyncFileSystem):
         self._s3 = None
         self.session = session
         self.fixed_upload_size = fixed_upload_size
+        self.local_expiry_check = local_expiry_check
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1")
         self.max_concurrency = max_concurrency
@@ -2414,7 +2420,12 @@ class S3File(AbstractBufferedFile):
             # Reflect head
             self.s3_additional_kwargs.update(head)
 
-        if "r" in mode and size is None and "ETag" in self.details:
+        if (
+            "r" in mode
+            and size is None
+            and "ETag" in self.details
+            and not s3.local_expiry_check
+        ):
             self.req_kw["IfMatch"] = self.details["ETag"]
 
     def _call_s3(self, method, *kwarglist, **kwargs):
@@ -2495,6 +2506,7 @@ class S3File(AbstractBufferedFile):
                 start,
                 end,
                 req_kw=self.req_kw,
+                details=self.details,
             )
 
         except OSError as ex:
@@ -2643,9 +2655,11 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         return out
 
 
-def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
+def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None, details=None):
     if req_kw is None:
         req_kw = {}
+    if details is None:
+        details = {}
     if start == end:
         logger.debug(
             "skip fetch for negative range - bucket=%s,key=%s,start=%d,end=%d",
@@ -2656,10 +2670,17 @@ def _fetch_range(fs, bucket, key, version_id, start, end, req_kw=None):
         )
         return b""
     logger.debug("Fetch: %s/%s, %s-%s", bucket, key, start, end)
-    return sync(fs.loop, _inner_fetch, fs, bucket, key, version_id, start, end, req_kw)
+    return sync(
+        fs.loop, _inner_fetch, fs, bucket, key, version_id, start, end, req_kw, details
+    )
 
 
-async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
+async def _inner_fetch(
+    fs, bucket, key, version_id, start, end, req_kw=None, details=None
+):
+    if details is None:
+        details = {}
+
     async def _call_and_read():
         resp = await fs._call_s3(
             "get_object",
@@ -2669,6 +2690,12 @@ async def _inner_fetch(fs, bucket, key, version_id, start, end, req_kw=None):
             **version_id_kw(version_id),
             **req_kw,
         )
+        if (
+            fs.local_expiry_check
+            and "ETag" in details
+            and details["ETag"] != resp.get("ETag")
+        ):
+            raise FileExpired(filename=details["name"], e_tag=details.get("ETag"))
         try:
             return await resp["Body"].read()
         finally:

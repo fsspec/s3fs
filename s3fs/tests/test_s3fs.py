@@ -20,7 +20,7 @@ from dateutil.tz import tzutc
 import botocore
 import s3fs.core
 from s3fs.core import MAX_UPLOAD_PARTS, S3FileSystem, calculate_chunksize
-from s3fs.utils import ignoring, SSEParams
+from s3fs.utils import ignoring, SSEParams, FileExpired
 from botocore.exceptions import NoCredentialsError
 from fsspec.asyn import sync
 from fsspec.callbacks import Callback
@@ -146,14 +146,6 @@ def s3(s3_base):
     s3 = S3FileSystem(anon=False, client_kwargs={"endpoint_url": endpoint_uri})
     s3.invalidate_cache()
     yield s3
-
-
-@contextmanager
-def expect_errno(expected_errno):
-    """Expect an OSError and validate its errno code."""
-    with pytest.raises(OSError) as error:
-        yield
-    assert error.value.errno == expected_errno, "OSError has wrong error code."
 
 
 def test_simple(s3):
@@ -1104,6 +1096,19 @@ def test_errors_cause_preservings(monkeypatch, s3):
         s3.info("test/a.txt")
 
     assert exc.value.__cause__ is None
+
+
+def test_local_expiry_check(s3):
+    s3 = S3FileSystem(
+        local_expiry_check=True,
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    path = test_bucket_name + "/test/accounts.1.json"
+
+    with s3.open(path, "r") as f:
+        f.read(10)
+        f.read(10)
 
 
 def test_read_small(s3):
@@ -2381,7 +2386,13 @@ def test_get_file_info_with_selector(s3):
     condition=version.parse(moto.__version__) <= version.parse("1.3.16"),
     reason="Moto 1.3.16 is not supporting pre-conditions.",
 )
-def test_raise_exception_when_file_has_changed_during_reading(s3):
+@pytest.mark.parametrize("local_check", [False, True])
+def test_raise_exception_when_file_has_changed_during_reading(s3, local_check):
+    s3 = S3FileSystem(
+        local_expiry_check=local_check,
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
     test_file_name = "file1"
     test_file = "s3://" + test_bucket_name + "/" + test_file_name
     content1 = b"123"
@@ -2402,7 +2413,7 @@ def test_raise_exception_when_file_has_changed_during_reading(s3):
 
     with s3.open(test_file, "rb") as f:
         create_file(content2)
-        with expect_errno(errno.EBUSY):
+        with pytest.raises(FileExpired):
             f.read()
 
 
