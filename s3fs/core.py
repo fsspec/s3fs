@@ -1,4 +1,5 @@
 import asyncio
+import bisect
 import errno
 import io
 import logging
@@ -1008,11 +1009,14 @@ class S3FileSystem(AsyncFileSystem):
         # Explicitly add directories to their parents in the dircache
         for d in dirs:
             par = self._parent(d["name"])
-            # extra condition here (in any()) to deal with directory-marking files
-            if par in thisdircache and not any(
-                _["name"] == d["name"] for _ in thisdircache[par]
-            ):
-                thisdircache[par].append(d)
+            if par in thisdircache:
+                # listing is sorted
+                ind = bisect.bisect_right(
+                    thisdircache[par], d["name"], key=lambda _: _["name"]
+                )
+                if thisdircache[par][ind - 1]["name"] != d["name"]:
+                    # name is not already present
+                    thisdircache[par].insert(ind, d)
 
         if not prefix:
             for k, v in thisdircache.items():
