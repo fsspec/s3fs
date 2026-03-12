@@ -2625,6 +2625,46 @@ def test_find_with_prefix(s3):
     )
 
 
+def test_find_with_prefix_and_withdirs(s3):
+    # Issue #1013: prefix must be combinable with withdirs (used by _glob internally)
+    for cursor in range(10):
+        s3.touch(test_bucket_name + f"/wdpfx/sub/file_{cursor}")
+
+    # withdirs=True + prefix should work and include synthesised directory entries
+    result = s3.find(test_bucket_name, prefix="wdpfx", withdirs=True)
+    assert test_bucket_name + "/wdpfx/sub" in result
+    assert all(
+        r.startswith(test_bucket_name + "/wdpfx") for r in result
+    ), "prefix filter must be respected"
+    assert len([r for r in result if "file_" in r]) == 10
+
+    # prefix alone (withdirs=False default) must still work
+    files_only = s3.find(test_bucket_name + "/wdpfx/sub/", prefix="file_")
+    assert len(files_only) == 10
+
+
+def test_find_with_prefix_and_maxdepth(s3):
+    # Issue #1013: prefix must be combinable with maxdepth
+    for cursor in range(5):
+        s3.touch(test_bucket_name + f"/mxpfx/sub/file_{cursor}")
+    s3.touch(test_bucket_name + "/mxpfx_top")
+
+    # maxdepth=1 from test_bucket_name: only direct children (depth 1) are returned
+    # test_bucket_name/mxpfx_top is at depth 1, test_bucket_name/mxpfx/sub/file_* are at depth 3
+    result = s3.find(test_bucket_name, prefix="mxpfx", maxdepth=1)
+    assert test_bucket_name + "/mxpfx_top" in result
+    assert not any("file_" in r for r in result), "depth-2+ files must be excluded"
+
+    # maxdepth=2: picks up test_bucket_name/mxpfx/sub (depth 2 dir) but not files inside
+    result2 = s3.find(test_bucket_name, prefix="mxpfx", maxdepth=2, withdirs=True)
+    assert test_bucket_name + "/mxpfx/sub" in result2
+    assert not any("file_" in r for r in result2), "depth-3 files must be excluded"
+
+    # maxdepth=3: all files now reachable
+    result3 = s3.find(test_bucket_name, prefix="mxpfx", maxdepth=3)
+    assert len([r for r in result3 if "file_" in r]) == 5
+
+
 def test_list_after_find(s3):
     before = s3.ls("s3://test")
     s3.invalidate_cache("s3://test/2014-01-01.csv")
