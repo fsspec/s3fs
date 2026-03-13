@@ -946,25 +946,53 @@ class S3FileSystem(AsyncFileSystem):
             when used by glob, but users usually only want files.
         prefix: str
             Only return files that match ``^{path}/{prefix}`` (if there is an
-            exact match ``filename == {path}/{prefix}``, it also will be included)
+            exact match ``filename == {path}/{prefix}``, it also will be included).
+            Can be combined with ``withdirs`` and ``maxdepth``.
         """
         path = self._strip_protocol(path)
         bucket, key, _ = self.split_path(path)
         if not bucket:
             raise ValueError("Cannot traverse all of S3")
-        if (withdirs or maxdepth) and prefix:
-            # TODO: perhaps propagate these to a glob(f"path/{prefix}*") call
-            raise ValueError(
-                "Can not specify 'prefix' option alongside 'withdirs'/'maxdepth' options."
-            )
         if maxdepth:
-            return await super()._find(
-                bucket + "/" + key,
-                maxdepth=maxdepth,
-                withdirs=withdirs,
-                detail=detail,
-                **kwargs,
+            if not prefix:
+                return await super()._find(
+                    bucket + "/" + key,
+                    maxdepth=maxdepth,
+                    withdirs=withdirs,
+                    detail=detail,
+                    **kwargs,
+                )
+            # maxdepth + prefix: one delimiter-based listing for the first level
+            # (server-side prefix filter), then recurse into matching subdirs
+            # normally — avoids fetching all nested objects up front.
+            first_level = await self._lsdir(
+                path, delimiter="/", prefix=prefix, **kwargs
             )
+            files = [o for o in first_level if o["type"] != "directory"]
+            dirs = [o for o in first_level if o["type"] == "directory"]
+            out = list(files)
+            out_dirs = list(dirs)
+            if maxdepth > 1:
+                for d in dirs:
+                    sub = await self._find(
+                        d["name"],
+                        maxdepth=maxdepth - 1,
+                        withdirs=withdirs,
+                        detail=True,
+                        **kwargs,
+                    )
+                    for name, info in sub.items():
+                        if name == d["name"]:
+                            continue  # root dir already in out_dirs
+                        if info["type"] == "directory":
+                            out_dirs.append(info)
+                        else:
+                            out.append(info)
+            if withdirs:
+                out = sorted(out + out_dirs, key=lambda x: x["name"])
+            if detail:
+                return {o["name"]: o for o in out}
+            return [o["name"] for o in out]
         # TODO: implement find from dircache, if all listings are present
         # if refresh is False:
         #     out = incomplete_tree_dirs(self.dircache, path)
