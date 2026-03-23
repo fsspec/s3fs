@@ -3198,3 +3198,24 @@ def test_rm_recursive_prfix(s3):
     logs_path = f"s3://{test_bucket_name}/{prefix}"
     s3.rm(logs_path, recursive=True)
     assert not s3.isdir(logs_path)
+
+
+@pytest.mark.parametrize("value, expected", [
+    ("True", True),
+    ("true", True),
+    ("TRUE", True),
+    ("t", True),
+    ("T", True),
+    ("1", True),
+    ("a", False),
+    ("False", False),
+    ("false", False),
+    ("FALSE", False),
+    ("f", False),
+    ("F", False),
+])
+def test_anonymous_from_environment_variable(value, expected, monkeypatch):
+    monkeypatch.setenv("S3FS_ANONYMOUS", value)
+    s = s3fs.S3FileSystem()
+    assert s.anon == expected
+    S3FileSystem.clear_instance_cache()

@@ -268,10 +268,12 @@ class S3FileSystem(AsyncFileSystem):
 
     Parameters
     ----------
-    anon : bool (False)
+    anon : bool or None (None)
         Whether to use anonymous connection (public buckets only). If False,
         uses the key/secret given, or boto's credential resolver (client_kwargs,
-        environment, variables, config files, EC2 IAM server, in that order)
+        environment, variables, config files, EC2 IAM server, in that order). If None,
+        this option will be set to True if the environment variable S3FS_ANONYMOUS
+        is set to true, True, t, T, or 1.
     endpoint_url : string (None)
         Use this endpoint_url, if specified. Needed for connecting to non-AWS
         S3 buckets. Takes precedence over `endpoint_url` in client_kwargs.
@@ -366,7 +368,7 @@ class S3FileSystem(AsyncFileSystem):
 
     def __init__(
         self,
-        anon=False,
+        anon=None,
         endpoint_url=None,
         key=None,
         secret=None,
@@ -402,6 +404,8 @@ class S3FileSystem(AsyncFileSystem):
 
         self.endpoint_url = endpoint_url
 
+        if anon is None:
+            anon = os.getenv("S3FS_ANONYMOUS", "False").lower() in ("1", "true", "t")
         self.anon = anon
         self.key = key
         self.secret = secret
