@@ -3217,5 +3217,13 @@ def test_rm_recursive_prfix(s3):
 def test_anonymous_from_environment_variable(value, expected, monkeypatch):
     monkeypatch.setenv("S3FS_ANONYMOUS", value)
     s = s3fs.S3FileSystem()
-    assert s.anon == expected
     S3FileSystem.clear_instance_cache()
+    assert s.anon == expected
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_anon_overrides_environment_variable(value, monkeypatch):
+    monkeypatch.setenv("S3FS_ANONYMOUS", str(not value))
+    s = s3fs.S3FileSystem(anon=value)
+    S3FileSystem.clear_instance_cache()
+    assert s.anon == value
