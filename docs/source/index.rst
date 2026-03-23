@@ -243,7 +243,8 @@ also has the appropriate environment variables, config files or IAM roles
 available.
 
 If none of the credential methods are available, only anonymous access will
-work, and ``anon=True`` must be passed to the constructor.
+work, and ``anon=True`` must be passed to the constructor (or the environment
+variable ``S3FS_ANONYMOUS`` set to ``True`` or ``1``).
 
 Furthermore, :py:meth:`.S3FileSystem.current` will return the most-recently created
 instance, so this method could be used in preference to the constructor in
