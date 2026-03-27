@@ -1,6 +1,14 @@
 Changelog
 =========
 
+2026.3.0
+--------
+
+- allow _find with both prefix/withdirs, allows prefix in glob (#1014)
+- deduplicate file listing with bisect (#1010)
+- check for file expiry with ETag if server doesn't support If-Match (#1008)
+- concurrent downloads in get/cat_file (#1007)
+
 2026.2.0
 --------
 
