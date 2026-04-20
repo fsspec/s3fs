@@ -599,7 +599,7 @@ class S3FileSystem(AsyncFileSystem):
         if self._s3 is not None and not refresh:
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
-                if all(_.closed for _ in hsess._sessions.values()):
+                if hsess._sessions and all(_.closed for _ in hsess._sessions.values()):
                     refresh = True
             if not refresh:
                 return self._s3
