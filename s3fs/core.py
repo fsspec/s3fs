@@ -600,96 +600,115 @@ class S3FileSystem(AsyncFileSystem):
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
                 sessions = hsess._sessions  # None after __aexit__ in newer aiobotocore
-                if sessions is not None and all(_.closed for _ in sessions.values()):
+                # Only refresh when sessions exist AND all are server-closed.
+                # An empty dict means no requests have been sent yet — not stale.
+                if sessions is not None and sessions and all(_.closed for _ in sessions.values()):
                     refresh = True
             if not refresh:
                 return self._s3
-        logger.debug("Setting up s3fs instance")
 
-        client_kwargs = self.client_kwargs.copy()
-        init_kwargs = dict(
-            aws_access_key_id=self.key,
-            aws_secret_access_key=self.secret,
-            aws_session_token=self.token,
-            endpoint_url=self.endpoint_url,
-        )
-        init_kwargs = {
-            key: value
-            for key, value in init_kwargs.items()
-            if value is not None and value != client_kwargs.get(key)
-        }
-        if "use_ssl" not in client_kwargs.keys():
-            init_kwargs["use_ssl"] = self.use_ssl
-        config_kwargs = self._prepare_config_kwargs()
-        if self.anon:
-            from botocore import UNSIGNED
+        # Serialize creator setup.  Callers such as zarr may launch concurrent
+        # coroutines via asyncio.gather that all see self._s3 is None and each
+        # try to build their own creator.  Without this lock every concurrent
+        # task would create a separate creator and then Fix 1 (close stale
+        # creator) would tear down a creator that a sibling task is still using,
+        # causing ``_sessions = None`` mid-request.  asyncio.Lock is
+        # event-loop–aware; creating it between two non-await lines is atomic
+        # so there is no race on the hasattr check.
+        if not hasattr(self, "_setup_lock"):
+            self._setup_lock = asyncio.Lock()
+        async with self._setup_lock:
+            # Re-check under the lock: a concurrent task may have set up the
+            # session while we were waiting.
+            if self._s3 is not None and not refresh:
+                return self._s3
 
-            drop_keys = {
-                "aws_access_key_id",
-                "aws_secret_access_key",
-                "aws_session_token",
-            }
+            logger.debug("Setting up s3fs instance")
+
+            client_kwargs = self.client_kwargs.copy()
+            init_kwargs = dict(
+                aws_access_key_id=self.key,
+                aws_secret_access_key=self.secret,
+                aws_session_token=self.token,
+                endpoint_url=self.endpoint_url,
+            )
             init_kwargs = {
-                key: value for key, value in init_kwargs.items() if key not in drop_keys
-            }
-            client_kwargs = {
                 key: value
-                for key, value in client_kwargs.items()
-                if key not in drop_keys
+                for key, value in init_kwargs.items()
+                if value is not None and value != client_kwargs.get(key)
             }
-            config_kwargs["signature_version"] = UNSIGNED
+            if "use_ssl" not in client_kwargs.keys():
+                init_kwargs["use_ssl"] = self.use_ssl
+            config_kwargs = self._prepare_config_kwargs()
+            if self.anon:
+                from botocore import UNSIGNED
 
-        conf = AioConfig(**config_kwargs)
-        if self.session is None or refresh:
-            self.session = aiobotocore.session.AioSession(**self.kwargs)
+                drop_keys = {
+                    "aws_access_key_id",
+                    "aws_secret_access_key",
+                    "aws_session_token",
+                }
+                init_kwargs = {
+                    key: value for key, value in init_kwargs.items() if key not in drop_keys
+                }
+                client_kwargs = {
+                    key: value
+                    for key, value in client_kwargs.items()
+                    if key not in drop_keys
+                }
+                config_kwargs["signature_version"] = UNSIGNED
 
-        for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
-            for option in ("region_name", "endpoint_url"):
-                if parameters.get(option):
-                    self.cache_regions = False
-                    break
-        else:
-            cache_regions = self.cache_regions
+            conf = AioConfig(**config_kwargs)
+            if self.session is None or refresh:
+                self.session = aiobotocore.session.AioSession(**self.kwargs)
 
-        logger.debug(
-            "RC: caching enabled? %r (explicit option is %r)",
-            cache_regions,
-            self.cache_regions,
-        )
-        self.cache_regions = cache_regions
-        if self.cache_regions:
-            s3creator = S3BucketRegionCache(
-                self.session, config=conf, **init_kwargs, **client_kwargs
+            for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
+                for option in ("region_name", "endpoint_url"):
+                    if parameters.get(option):
+                        self.cache_regions = False
+                        break
+            else:
+                cache_regions = self.cache_regions
+
+            logger.debug(
+                "RC: caching enabled? %r (explicit option is %r)",
+                cache_regions,
+                self.cache_regions,
             )
-            self._s3 = await s3creator.get_client()
-        else:
-            s3creator = self.session.create_client(
-                "s3", config=conf, **init_kwargs, **client_kwargs
-            )
-            self._s3 = await s3creator.__aenter__()
+            self.cache_regions = cache_regions
+            if self.cache_regions:
+                s3creator = S3BucketRegionCache(
+                    self.session, config=conf, **init_kwargs, **client_kwargs
+                )
+                self._s3 = await s3creator.get_client()
+            else:
+                s3creator = self.session.create_client(
+                    "s3", config=conf, **init_kwargs, **client_kwargs
+                )
+                self._s3 = await s3creator.__aenter__()
 
-        # Close the stale _s3creator before replacing it.  The old cache holds
-        # aiobotocore ClientSessions that are garbage-collected without an
-        # explicit close(), causing aiohttp "Unclosed client session" warnings.
-        # See: https://github.com/aio-libs/aiobotocore/issues/866
-        old_creator = getattr(self, "_s3creator", None)
-        if old_creator is not None:
-            try:
-                await old_creator.__aexit__(None, None, None)
-            except Exception:
-                pass
-        self._s3creator = s3creator
-        # the following actually closes the aiohttp connection; use of privates
-        # might break in the future, would cause exception at gc time
-        if not self.asynchronous:
-            old_finalizer = getattr(self, "_finalizer", None)
-            if old_finalizer is not None:
-                old_finalizer.detach()
-            self._finalizer = weakref.finalize(
-                self, self.close_session, self.loop, self._s3creator
-            )
-        self._kwargs_helper = ParamKwargsHelper(self._s3)
-        return self._s3
+            # Close the stale _s3creator before replacing it.  The old cache holds
+            # aiobotocore ClientSessions that are garbage-collected without an
+            # explicit close(), causing aiohttp "Unclosed client session" warnings.
+            # See: https://github.com/aio-libs/aiobotocore/issues/866
+            old_creator = getattr(self, "_s3creator", None)
+            if old_creator is not None:
+                try:
+                    await old_creator.__aexit__(None, None, None)
+                except Exception:
+                    pass
+            self._s3creator = s3creator
+            # the following actually closes the aiohttp connection; use of privates
+            # might break in the future, would cause exception at gc time
+            if not self.asynchronous:
+                old_finalizer = getattr(self, "_finalizer", None)
+                if old_finalizer is not None:
+                    old_finalizer.detach()
+                self._finalizer = weakref.finalize(
+                    self, self.close_session, self.loop, self._s3creator
+                )
+            self._kwargs_helper = ParamKwargsHelper(self._s3)
+            return self._s3
 
     _connect = set_session
 

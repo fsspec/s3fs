@@ -9,7 +9,11 @@ Unreleased
   connections mid-session (#NNNN)
 - guard stale-session check against ``_sessions = None`` (newer aiobotocore
   sets ``_sessions`` to ``None`` after close rather than leaving it as an
-  empty dict) (#NNNN)
+  empty dict) and against empty ``_sessions`` (no requests yet, not stale)
+  (#NNNN)
+- serialize ``set_session()`` creator setup under an ``asyncio.Lock`` to
+  prevent concurrent callers (e.g. ``asyncio.gather``) from each creating a
+  separate creator and then closing each other's in-flight sessions (#NNNN)
 
 2026.4.0
 --------
