@@ -599,7 +599,8 @@ class S3FileSystem(AsyncFileSystem):
         if self._s3 is not None and not refresh:
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
-                if all(_.closed for _ in hsess._sessions.values()):
+                sessions = hsess._sessions  # None after __aexit__ in newer aiobotocore
+                if sessions is not None and all(_.closed for _ in sessions.values()):
                     refresh = True
             if not refresh:
                 return self._s3
@@ -693,23 +694,6 @@ class S3FileSystem(AsyncFileSystem):
     _connect = set_session
 
     connect = sync_wrapper(set_session)
-
-    async def _close(self):
-        """Close the underlying S3 client and release all aiohttp sessions."""
-        finalizer = getattr(self, "_finalizer", None)
-        if finalizer is not None:
-            finalizer.detach()
-            self._finalizer = None
-        creator = getattr(self, "_s3creator", None)
-        if creator is not None:
-            try:
-                await creator.__aexit__(None, None, None)
-            except Exception:
-                pass
-            self._s3creator = None
-            self._s3 = None
-
-    close = sync_wrapper(_close)
 
     @staticmethod
     def close_session(loop, s3):

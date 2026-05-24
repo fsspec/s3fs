@@ -3220,21 +3220,6 @@ def test_stale_creator_closed_on_refresh(s3):
     asyncio.run(run())
 
 
-def test_close_releases_client(s3):
-    """Calling close() must release the S3 client and creator immediately."""
-
-    async def run():
-        await s3.set_session()
-        assert s3._s3creator is not None
-        assert s3._s3 is not None
-
-        await s3._close()
-
-        assert s3._s3creator is None, "_close() should set _s3creator to None"
-        assert s3._s3 is None, "_close() should set _s3 to None"
-
-    asyncio.run(run())
-
 
 def test_rm_recursive_prfix(s3):
     prefix = "logs/"  # must end with "/"
