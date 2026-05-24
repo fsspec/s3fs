@@ -1,6 +1,16 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- close stale ``S3BucketRegionCache`` on session refresh, eliminating
+  ``aiohttp`` "Unclosed client session" warnings when the server closes
+  connections mid-session (#NNNN)
+- add ``_close()`` / ``close()`` to ``S3FileSystem`` for deterministic
+  resource cleanup; previously cleanup relied entirely on garbage collection
+  via ``weakref.finalize`` (#NNNN)
+
 2026.4.0
 --------
 

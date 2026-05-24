@@ -3189,6 +3189,53 @@ def test_session_close():
     asyncio.run(run_program(False))
 
 
+def test_stale_creator_closed_on_refresh(s3):
+    """Old _s3creator must have __aexit__ called when set_session refreshes.
+
+    Without the fix, the stale aiobotocore ClientSession held by the old
+    _s3creator is garbage-collected without explicit close(), producing
+    aiohttp 'Unclosed client session' warnings at process exit.
+    """
+
+    async def run():
+        await s3.set_session()
+        assert s3._s3creator is not None
+
+        # Replace the real creator with a spy that records whether __aexit__
+        # is called.  The real client is already in s3._s3 so this is safe.
+        class _SpyCreator:
+            exited = False
+
+            async def __aexit__(self, *args):
+                _SpyCreator.exited = True
+
+        s3._s3creator = _SpyCreator()
+        await s3.set_session(refresh=True)
+
+        assert _SpyCreator.exited, (
+            "Old _s3creator.__aexit__ was not called during session refresh; "
+            "aiohttp sessions will leak"
+        )
+
+    asyncio.run(run())
+
+
+def test_close_releases_client(s3):
+    """Calling close() must release the S3 client and creator immediately."""
+
+    async def run():
+        await s3.set_session()
+        assert s3._s3creator is not None
+        assert s3._s3 is not None
+
+        await s3._close()
+
+        assert s3._s3creator is None, "_close() should set _s3creator to None"
+        assert s3._s3 is None, "_close() should set _s3 to None"
+
+    asyncio.run(run())
+
+
 def test_rm_recursive_prfix(s3):
     prefix = "logs/"  # must end with "/"
 

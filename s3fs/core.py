@@ -667,17 +667,49 @@ class S3FileSystem(AsyncFileSystem):
             )
             self._s3 = await s3creator.__aenter__()
 
+        # Close the stale _s3creator before replacing it.  The old cache holds
+        # aiobotocore ClientSessions that are garbage-collected without an
+        # explicit close(), causing aiohttp "Unclosed client session" warnings.
+        # See: https://github.com/aio-libs/aiobotocore/issues/866
+        old_creator = getattr(self, "_s3creator", None)
+        if old_creator is not None:
+            try:
+                await old_creator.__aexit__(None, None, None)
+            except Exception:
+                pass
         self._s3creator = s3creator
         # the following actually closes the aiohttp connection; use of privates
         # might break in the future, would cause exception at gc time
         if not self.asynchronous:
-            weakref.finalize(self, self.close_session, self.loop, self._s3creator)
+            old_finalizer = getattr(self, "_finalizer", None)
+            if old_finalizer is not None:
+                old_finalizer.detach()
+            self._finalizer = weakref.finalize(
+                self, self.close_session, self.loop, self._s3creator
+            )
         self._kwargs_helper = ParamKwargsHelper(self._s3)
         return self._s3
 
     _connect = set_session
 
     connect = sync_wrapper(set_session)
+
+    async def _close(self):
+        """Close the underlying S3 client and release all aiohttp sessions."""
+        finalizer = getattr(self, "_finalizer", None)
+        if finalizer is not None:
+            finalizer.detach()
+            self._finalizer = None
+        creator = getattr(self, "_s3creator", None)
+        if creator is not None:
+            try:
+                await creator.__aexit__(None, None, None)
+            except Exception:
+                pass
+            self._s3creator = None
+            self._s3 = None
+
+    close = sync_wrapper(_close)
 
     @staticmethod
     def close_session(loop, s3):
