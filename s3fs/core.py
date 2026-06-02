@@ -616,6 +616,43 @@ class S3FileSystem(AsyncFileSystem):
         # task would create a separate creator and then Fix 1 (close stale
         # creator) would tear down a creator that a sibling task is still using,
         # causing ``_sessions = None`` mid-request.
+        # Compute kwargs before the lock — pure reads, no awaits, safe to
+        # redo if another coroutine wins the race and we return early inside.
+        client_kwargs = self.client_kwargs.copy()
+        init_kwargs = dict(
+            aws_access_key_id=self.key,
+            aws_secret_access_key=self.secret,
+            aws_session_token=self.token,
+            endpoint_url=self.endpoint_url,
+        )
+        init_kwargs = {
+            key: value
+            for key, value in init_kwargs.items()
+            if value is not None and value != client_kwargs.get(key)
+        }
+        if "use_ssl" not in client_kwargs.keys():
+            init_kwargs["use_ssl"] = self.use_ssl
+        config_kwargs = self._prepare_config_kwargs()
+        if self.anon:
+            from botocore import UNSIGNED
+
+            drop_keys = {
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "aws_session_token",
+            }
+            init_kwargs = {
+                key: value for key, value in init_kwargs.items() if key not in drop_keys
+            }
+            client_kwargs = {
+                key: value
+                for key, value in client_kwargs.items()
+                if key not in drop_keys
+            }
+            config_kwargs["signature_version"] = UNSIGNED
+
+        conf = AioConfig(**config_kwargs)
+
         async with self._setup_lock:
             # Re-check under the lock: a concurrent task may have set up the
             # session while we were waiting.
@@ -624,42 +661,6 @@ class S3FileSystem(AsyncFileSystem):
 
             logger.debug("Setting up s3fs instance")
 
-            client_kwargs = self.client_kwargs.copy()
-            init_kwargs = dict(
-                aws_access_key_id=self.key,
-                aws_secret_access_key=self.secret,
-                aws_session_token=self.token,
-                endpoint_url=self.endpoint_url,
-            )
-            init_kwargs = {
-                key: value
-                for key, value in init_kwargs.items()
-                if value is not None and value != client_kwargs.get(key)
-            }
-            if "use_ssl" not in client_kwargs.keys():
-                init_kwargs["use_ssl"] = self.use_ssl
-            config_kwargs = self._prepare_config_kwargs()
-            if self.anon:
-                from botocore import UNSIGNED
-
-                drop_keys = {
-                    "aws_access_key_id",
-                    "aws_secret_access_key",
-                    "aws_session_token",
-                }
-                init_kwargs = {
-                    key: value
-                    for key, value in init_kwargs.items()
-                    if key not in drop_keys
-                }
-                client_kwargs = {
-                    key: value
-                    for key, value in client_kwargs.items()
-                    if key not in drop_keys
-                }
-                config_kwargs["signature_version"] = UNSIGNED
-
-            conf = AioConfig(**config_kwargs)
             if self.session is None or refresh:
                 self.session = aiobotocore.session.AioSession(**self.kwargs)
 
