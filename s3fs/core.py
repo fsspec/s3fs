@@ -1308,15 +1308,7 @@ class S3FileSystem(AsyncFileSystem):
             and (max_concurrency or self.max_concurrency) > 1
         ):
             chunksize = chunksize or self.default_block_size
-            resp = await self._call_s3(
-                "get_object",
-                Bucket=bucket,
-                Key=key,
-                **version_id_kw(version_id or vers),
-                **self.req_kw,
-            )
-            content_length = resp.get("ContentLength", None)
-            resp["Body"].close()
+            content_length = await self._size(path)
 
             if content_length and content_length > chunksize:
                 return await self._cat_file_concurrent(
