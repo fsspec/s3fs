@@ -425,6 +425,7 @@ class S3FileSystem(AsyncFileSystem):
         self.use_ssl = use_ssl
         self.cache_regions = cache_regions
         self._s3 = None
+        self._setup_lock = asyncio.Lock()
         self.session = session
         self.fixed_upload_size = fixed_upload_size
         self.local_expiry_check = local_expiry_check
@@ -600,9 +601,11 @@ class S3FileSystem(AsyncFileSystem):
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
                 sessions = hsess._sessions  # None after __aexit__ in newer aiobotocore
-                # Only refresh when sessions exist AND all are server-closed.
-                # An empty dict means no requests have been sent yet — not stale.
-                if sessions is not None and sessions and all(_.closed for _ in sessions.values()):
+                # Treat sessions=None (aiobotocore 3.x post-close) and all
+                # server-closed sessions as stale.  Empty dict = not yet used.
+                if sessions is None or (
+                    sessions and all(_.closed for _ in sessions.values())
+                ):
                     refresh = True
             if not refresh:
                 return self._s3
@@ -612,11 +615,7 @@ class S3FileSystem(AsyncFileSystem):
         # try to build their own creator.  Without this lock every concurrent
         # task would create a separate creator and then Fix 1 (close stale
         # creator) would tear down a creator that a sibling task is still using,
-        # causing ``_sessions = None`` mid-request.  asyncio.Lock is
-        # event-loop–aware; creating it between two non-await lines is atomic
-        # so there is no race on the hasattr check.
-        if not hasattr(self, "_setup_lock"):
-            self._setup_lock = asyncio.Lock()
+        # causing ``_sessions = None`` mid-request.
         async with self._setup_lock:
             # Re-check under the lock: a concurrent task may have set up the
             # session while we were waiting.
@@ -649,7 +648,9 @@ class S3FileSystem(AsyncFileSystem):
                     "aws_session_token",
                 }
                 init_kwargs = {
-                    key: value for key, value in init_kwargs.items() if key not in drop_keys
+                    key: value
+                    for key, value in init_kwargs.items()
+                    if key not in drop_keys
                 }
                 client_kwargs = {
                     key: value
