@@ -3172,14 +3172,14 @@ def test_find_missing_ls(s3):
     assert set(listed_cached) == set(listed_no_cache)
 
 
-def test_session_close():
+def test_session_close(s3):
+    s3.pipe(f"{test_bucket_name}/dir/afile", b"small")
+
     async def run_program(run):
-        s3 = s3fs.S3FileSystem(anon=True, asynchronous=True)
+        s3 = s3fs.S3FileSystem(anon=True, asynchronous=True, endpoint_url=endpoint_uri)
+        s3.invalidate_cache()
         session = await s3.set_session()
-        files = await s3._ls(
-            "s3://noaa-hrrr-bdp-pds/hrrr.20140730/conus/"
-        )  # Random open data store
-        print(f"Number of files {len(files)}")
+        files = await s3._ls(f"{test_bucket_name}/dir")
         await session.close()
 
     import aiobotocore.httpsession
@@ -3187,6 +3187,97 @@ def test_session_close():
     aiobotocore.httpsession.AIOHTTPSession
     asyncio.run(run_program(True))
     asyncio.run(run_program(False))
+
+
+def test_set_session_sessions_none(s3):
+    """After the HTTP session is closed and aiobotocore sets _sessions=None
+    (aiobotocore 3.x behaviour), set_session must rebuild the client rather
+    than returning the dead one."""
+    s3.pipe(f"{test_bucket_name}/dir/afile", b"small")
+
+    async def run():
+        fs = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        await fs.set_session()
+        original_client = fs._s3
+
+        # Simulate aiobotocore 3.x behaviour: __aexit__ sets _sessions to None.
+        hsess = fs._s3._endpoint.http_session
+        hsess._sessions = None
+
+        # set_session must detect the dead client and create a new one.
+        await fs.set_session()
+        assert (
+            fs._s3 is not original_client
+        ), "set_session should have rebuilt the client when _sessions is None"
+        await fs.set_session(refresh=True)  # clean up
+
+    asyncio.run(run())
+
+
+def test_set_session_concurrent_no_leak(s3):
+    """Concurrent calls to set_session on a fresh instance must not leak
+    clients (i.e. only one client should be created, not N)."""
+    s3.pipe(f"{test_bucket_name}/dir/afile", b"small")
+
+    async def run():
+        S3FileSystem.clear_instance_cache()
+        fs = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        # All coroutines start with _s3 == None; fire them simultaneously.
+        results = await asyncio.gather(*[fs.set_session() for _ in range(8)])
+        # Every coroutine must get back the same client object.
+        assert (
+            len(set(id(r) for r in results)) == 1
+        ), "Concurrent set_session calls returned different client objects"
+        # Only one client should be alive (no leaked extras).
+        assert fs._s3 is results[0]
+        await fs.set_session(refresh=True)  # clean up
+
+    asyncio.run(run())
+
+
+def test_set_session_preserves_injected_session(s3):
+    """A session= injected at construction time must not be replaced when
+    set_session triggers a refresh due to closed HTTP connections."""
+    s3.pipe(f"{test_bucket_name}/dir/afile", b"small")
+
+    async def run():
+        import aiobotocore.session as aio_session
+
+        custom_session = aio_session.AioSession()
+        fs = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            session=custom_session,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        await fs.set_session()
+        assert (
+            fs.session is custom_session
+        ), "session should not be replaced on first connect"
+
+        # Simulate all HTTP connections being closed so set_session will refresh.
+        hsess = fs._s3._endpoint.http_session
+        if hsess._sessions:
+            for sess in hsess._sessions.values():
+                await sess.close()
+
+        await fs.set_session()
+        assert (
+            fs.session is custom_session
+        ), "set_session must not replace a user-injected session on refresh"
+
+    asyncio.run(run())
 
 
 def test_rm_recursive_prfix(s3):

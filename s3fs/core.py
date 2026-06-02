@@ -425,7 +425,13 @@ class S3FileSystem(AsyncFileSystem):
         self.use_ssl = use_ssl
         self.cache_regions = cache_regions
         self._s3 = None
+        self._set_session_lock = (
+            None  # created lazily in set_session on the running loop
+        )
         self.session = session
+        self._session_is_owned = (
+            session is None
+        )  # False when the caller injected a session
         self.fixed_upload_size = fixed_upload_size
         self.local_expiry_check = local_expiry_check
         if max_concurrency < 1:
@@ -596,10 +602,27 @@ class S3FileSystem(AsyncFileSystem):
         # blocking version of set_session
         >>> s3.connect(refresh=True)  # doctest: +SKIP
         """
+        # Lazily create the lock on the running loop so it is always loop-local.
+        # Note: the sync connect() path dispatches through sync_wrapper onto the
+        # background loop, so concurrent sync callers sharing that loop are also
+        # serialised here.  A concurrent sync race from *different* threads before
+        # the background loop is running is extremely unlikely in practice.
+        if self._set_session_lock is None:
+            self._set_session_lock = asyncio.Lock()
+        async with self._set_session_lock:
+            return await self._set_session_inner(refresh=refresh, kwargs=kwargs)
+
+    async def _set_session_inner(self, refresh=False, kwargs={}):
         if self._s3 is not None and not refresh:
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
-                if hsess._sessions and all(_.closed for _ in hsess._sessions.values()):
+                # _sessions is None on aiobotocore 3.x after the HTTP session has
+                # been explicitly closed (AIOHTTPSession.__aexit__ sets it to None).
+                # An empty dict means no connections have been made yet — don't
+                # rebuild in that case (avoids vacuous all([]) == True).
+                if hsess._sessions is None or (
+                    hsess._sessions and all(_.closed for _ in hsess._sessions.values())
+                ):
                     refresh = True
             if not refresh:
                 return self._s3
@@ -639,8 +662,13 @@ class S3FileSystem(AsyncFileSystem):
             config_kwargs["signature_version"] = UNSIGNED
 
         conf = AioConfig(**config_kwargs)
-        if self.session is None or refresh:
+        if self.session is None or (refresh and self._session_is_owned):
+            # Only (re)create the AioSession when s3fs owns it.  If the caller
+            # injected a session via session= at construction time we must not
+            # replace it here — doing so would silently discard any credentials
+            # or custom configuration that were baked into it.
             self.session = aiobotocore.session.AioSession(**self.kwargs)
+            self._session_is_owned = True
 
         for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
             for option in ("region_name", "endpoint_url"):
