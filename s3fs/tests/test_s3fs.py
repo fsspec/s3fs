@@ -3289,3 +3289,55 @@ def test_rm_recursive_prfix(s3):
     logs_path = f"s3://{test_bucket_name}/{prefix}"
     s3.rm(logs_path, recursive=True)
     assert not s3.isdir(logs_path)
+
+
+def test_set_session_closed_sessions_rebuilds_once(s3):
+    """Regression test for the #1019 perf regression: a populated-but-all-closed
+    _sessions dict must rebuild the client exactly once, then reuse it. The
+    rebuilt client has an empty _sessions dict, which must not count as
+    "all closed" (vacuous all([]) == True) and force a refresh on every call.
+    """
+    import aiobotocore.session as aio_session
+    from unittest import mock
+
+    s3.pipe(f"{test_bucket_name}/dir/afile", b"small")
+
+    create_client_calls = 0
+    original_create_client = aio_session.AioSession._create_client
+
+    async def counting_create_client(self, *args, **kwargs):
+        nonlocal create_client_calls
+        create_client_calls += 1
+        return await original_create_client(self, *args, **kwargs)
+
+    async def run():
+        fs = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            client_kwargs={"endpoint_url": endpoint_uri},
+            skip_instance_cache=True,
+        )
+        await fs._ls(f"{test_bucket_name}/dir")  # populates _sessions
+        sessions = fs._s3._endpoint.http_session._sessions
+        assert sessions, "expected a populated _sessions dict after an op"
+
+        for sess in sessions.values():
+            await sess.close()
+
+        baseline = create_client_calls  # ignore the warmup build above
+        iterations = 10
+        for _ in range(iterations):
+            await fs.set_session()
+
+        rebuilds = create_client_calls - baseline
+        assert rebuilds == 1, (
+            f"set_session rebuilt the client {rebuilds} times across {iterations} "
+            f"calls; expected 1. >1 means the empty-dict case forces a refresh on "
+            f"every call (#1019 regression)."
+        )
+        await fs.set_session(refresh=True)  # clean up
+
+    with mock.patch.object(
+        aio_session.AioSession, "_create_client", counting_create_client
+    ):
+        asyncio.run(run())

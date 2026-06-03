@@ -602,11 +602,6 @@ class S3FileSystem(AsyncFileSystem):
         # blocking version of set_session
         >>> s3.connect(refresh=True)  # doctest: +SKIP
         """
-        # Lazily create the lock on the running loop so it is always loop-local.
-        # Note: the sync connect() path dispatches through sync_wrapper onto the
-        # background loop, so concurrent sync callers sharing that loop are also
-        # serialised here.  A concurrent sync race from *different* threads before
-        # the background loop is running is extremely unlikely in practice.
         if self._set_session_lock is None:
             self._set_session_lock = asyncio.Lock()
         async with self._set_session_lock:
@@ -618,8 +613,7 @@ class S3FileSystem(AsyncFileSystem):
             if hsess is not None:
                 # _sessions is None on aiobotocore 3.x after the HTTP session has
                 # been explicitly closed (AIOHTTPSession.__aexit__ sets it to None).
-                # An empty dict means no connections have been made yet — don't
-                # rebuild in that case (avoids vacuous all([]) == True).
+                # An empty dict means no connections have been made yet
                 if hsess._sessions is None or (
                     hsess._sessions and all(_.closed for _ in hsess._sessions.values())
                 ):
