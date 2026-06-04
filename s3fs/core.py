@@ -425,7 +425,11 @@ class S3FileSystem(AsyncFileSystem):
         self.use_ssl = use_ssl
         self.cache_regions = cache_regions
         self._s3 = None
+        self._set_session_lock = asyncio.Lock()
         self.session = session
+        self._session_is_owned = (
+            session is None
+        )  # False when the caller injected a session
         self.fixed_upload_size = fixed_upload_size
         self.local_expiry_check = local_expiry_check
         if max_concurrency < 1:
@@ -599,7 +603,9 @@ class S3FileSystem(AsyncFileSystem):
         if self._s3 is not None and not refresh:
             hsess = getattr(getattr(self._s3, "_endpoint", None), "http_session", None)
             if hsess is not None:
-                if all(_.closed for _ in hsess._sessions.values()):
+                if hsess._sessions is None or (
+                    hsess._sessions and all(_.closed for _ in hsess._sessions.values())
+                ):
                     refresh = True
             if not refresh:
                 return self._s3
@@ -638,36 +644,43 @@ class S3FileSystem(AsyncFileSystem):
             }
             config_kwargs["signature_version"] = UNSIGNED
 
-        conf = AioConfig(**config_kwargs)
-        if self.session is None or refresh:
-            self.session = aiobotocore.session.AioSession(**self.kwargs)
+        async with self._set_session_lock:
+            # Re-check under the lock: a concurrent task may have set up the
+            # session while we were waiting.
+            if self._s3 is not None and not refresh:
+                return self._s3
+            conf = AioConfig(**config_kwargs)
+            if self.session is None or (refresh and self._session_is_owned):
+                # Only (re)create the AioSession when s3fs owns it
+                self.session = aiobotocore.session.AioSession(**self.kwargs)
+                self._session_is_owned = True
 
-        for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
-            for option in ("region_name", "endpoint_url"):
-                if parameters.get(option):
-                    self.cache_regions = False
-                    break
-        else:
-            cache_regions = self.cache_regions
+            for parameters in (config_kwargs, self.kwargs, init_kwargs, client_kwargs):
+                for option in ("region_name", "endpoint_url"):
+                    if parameters.get(option):
+                        self.cache_regions = False
+                        break
+            else:
+                cache_regions = self.cache_regions
 
-        logger.debug(
-            "RC: caching enabled? %r (explicit option is %r)",
-            cache_regions,
-            self.cache_regions,
-        )
-        self.cache_regions = cache_regions
-        if self.cache_regions:
-            s3creator = S3BucketRegionCache(
-                self.session, config=conf, **init_kwargs, **client_kwargs
+            logger.debug(
+                "RC: caching enabled? %r (explicit option is %r)",
+                cache_regions,
+                self.cache_regions,
             )
-            self._s3 = await s3creator.get_client()
-        else:
-            s3creator = self.session.create_client(
-                "s3", config=conf, **init_kwargs, **client_kwargs
-            )
-            self._s3 = await s3creator.__aenter__()
+            self.cache_regions = cache_regions
+            if self.cache_regions:
+                s3creator = S3BucketRegionCache(
+                    self.session, config=conf, **init_kwargs, **client_kwargs
+                )
+                self._s3 = await s3creator.get_client()
+            else:
+                s3creator = self.session.create_client(
+                    "s3", config=conf, **init_kwargs, **client_kwargs
+                )
+                self._s3 = await s3creator.__aenter__()
 
-        self._s3creator = s3creator
+            self._s3creator = s3creator
         # the following actually closes the aiohttp connection; use of privates
         # might break in the future, would cause exception at gc time
         if not self.asynchronous:
