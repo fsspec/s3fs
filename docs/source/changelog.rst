@@ -4,7 +4,8 @@ Changelog
 2026.4.0
 --------
 
--no changes-
+- faster default downloads: 8MB transfer chunks and continuous (non-batched)
+  concurrency for get/cat_file, plus per-chunk retries
 
 2026.3.0
 --------

@@ -71,6 +71,13 @@ S3_RETRYABLE_ERRORS = (
 
 MAX_UPLOAD_PARTS = 10_000  # maximum number of parts for S3 multipart upload
 
+# Default chunk size for concurrent (multipart) ranged downloads in ``get_file``
+# and ``cat_file``. Kept separate from ``default_block_size`` (which sizes the
+# ``S3File`` read-ahead buffer) so that downloads parallelise aggressively
+# out-of-the-box without shrinking the read-ahead buffer. 8 MiB matches the
+# ``aws s3 cp`` / boto3 ``s3transfer`` default multipart chunk size.
+DEFAULT_TRANSFER_CHUNKSIZE = 8 * 2**20
+
 if ClientPayloadError is not None:
     S3_RETRYABLE_ERRORS += (ClientPayloadError,)
 
@@ -295,6 +302,14 @@ class S3FileSystem(AsyncFileSystem):
     default_block_size: int (None)
         If given, the default block size value used for ``open()``, if no
         specific value is given at all time. The built-in default is 50MB.
+    default_transfer_chunksize: int (None)
+        If given, the default chunk size used to split a single file into
+        concurrent ranged requests for ``get()``/``get_file()`` (download) and
+        ``cat()``/``cat_file()`` (read). The built-in default is 8MB, matching
+        the ``aws s3 cp`` multipart chunk size. Smaller values increase
+        parallelism (more concurrent requests per file); larger values reduce
+        per-request overhead. This is independent of ``default_block_size`` so
+        downloads parallelise without affecting the ``open()`` read-ahead buffer.
     default_fill_cache : Bool (True)
         Whether to use cache filling with open by default. Refer to
         ``S3File.open``.
@@ -361,8 +376,9 @@ class S3FileSystem(AsyncFileSystem):
     retries = 5
     read_timeout = 15
     default_block_size = 50 * 2**20
+    default_transfer_chunksize = DEFAULT_TRANSFER_CHUNKSIZE
     protocol = ("s3", "s3a")
-    _extra_tokenize_attributes = ("default_block_size",)
+    _extra_tokenize_attributes = ("default_block_size", "default_transfer_chunksize")
 
     def __init__(
         self,
@@ -375,6 +391,7 @@ class S3FileSystem(AsyncFileSystem):
         client_kwargs=None,
         requester_pays=False,
         default_block_size=None,
+        default_transfer_chunksize=None,
         default_fill_cache=True,
         default_cache_type="readahead",
         version_aware=False,
@@ -415,6 +432,9 @@ class S3FileSystem(AsyncFileSystem):
         super().__init__(loop=loop, asynchronous=asynchronous, **super_kwargs)
 
         self.default_block_size = default_block_size or self.default_block_size
+        self.default_transfer_chunksize = (
+            default_transfer_chunksize or self.default_transfer_chunksize
+        )
         self.default_fill_cache = default_fill_cache
         self.default_cache_type = default_cache_type
         self.version_aware = version_aware
@@ -1320,7 +1340,7 @@ class S3FileSystem(AsyncFileSystem):
             and end is None
             and (max_concurrency or self.max_concurrency) > 1
         ):
-            chunksize = chunksize or self.default_block_size
+            chunksize = chunksize or self.default_transfer_chunksize
             content_length = await self._size(path)
 
             if content_length and content_length > chunksize:
@@ -1345,34 +1365,40 @@ class S3FileSystem(AsyncFileSystem):
         version_id=None,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
+
+        # Keep exactly ``max_concurrency`` ranged GETs in flight at all times
+        # (rather than waiting for a whole batch to finish) so the connection
+        # stays saturated, like ``aws s3 cp``. Each chunk is written into its
+        # disjoint slice of the preallocated buffer as soon as it arrives, so
+        # memory stays bounded to ~``max_concurrency * chunksize`` of in-flight
+        # data on top of the result buffer.
+        semaphore = asyncio.Semaphore(max_concurrency)
+        buf = bytearray(content_length)
 
         async def _read_chunk(start, end):
-            kw = self.req_kw.copy()
-            kw["Range"] = f"bytes={start}-{end}"
-            resp = await self._call_s3(
-                "get_object",
-                Bucket=bucket,
-                Key=key,
-                **version_id_kw(version_id),
-                **kw,
-            )
-            data = await resp["Body"].read()
-            resp["Body"].close()
-            return start, data
+            async def _fetch():
+                kw = self.req_kw.copy()
+                kw["Range"] = f"bytes={start}-{end}"
+                resp = await self._call_s3(
+                    "get_object",
+                    Bucket=bucket,
+                    Key=key,
+                    **version_id_kw(version_id),
+                    **kw,
+                )
+                try:
+                    return await resp["Body"].read()
+                finally:
+                    resp["Body"].close()
 
-        ranges = list(_get_brange(content_length, chunksize))
-        inds = list(range(0, len(ranges), max_concurrency)) + [len(ranges)]
+            async with semaphore:
+                data = await _error_wrapper(_fetch, retries=self.retries)
+            buf[start : start + len(data)] = data
 
-        buf = bytearray(content_length)
-        for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
-            results = await asyncio.gather(
-                *[
-                    _read_chunk(start, end)
-                    for start, end in ranges[batch_start:batch_stop]
-                ]
-            )
-            for offset, data in results:
-                buf[offset : offset + len(data)] = data
+        ranges = _get_brange(content_length, chunksize)
+        await asyncio.gather(*[_read_chunk(start, end) for start, end in ranges])
 
         return bytes(buf)
 
@@ -1576,38 +1602,47 @@ class S3FileSystem(AsyncFileSystem):
         version_id=None,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
 
-        async def _download_chunk(start, end):
-            kw = self.req_kw.copy()
-            kw["Range"] = f"bytes={start}-{end}"
-            resp = await self._call_s3(
-                "get_object",
-                Bucket=bucket,
-                Key=key,
-                **version_id_kw(version_id),
-                **kw,
-            )
-            data = await resp["Body"].read()
-            resp["Body"].close()
-            return start, data
-
-        ranges = list(_get_brange(content_length, chunksize))
-        inds = list(range(0, len(ranges), max_concurrency)) + [len(ranges)]
+        # Keep exactly ``max_concurrency`` ranged GETs in flight at all times so
+        # the connection stays saturated, like ``aws s3 cp``. Each chunk is
+        # written to its offset in the preallocated file as soon as it arrives,
+        # so peak memory stays bounded to ~``max_concurrency * chunksize``. The
+        # single file handle is shared, so seek+write is serialised with a lock.
+        semaphore = asyncio.Semaphore(max_concurrency)
+        write_lock = asyncio.Lock()
 
         with open(lpath, "wb") as f0:
             f0.truncate(content_length)
 
-            for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
-                results = await asyncio.gather(
-                    *[
-                        _download_chunk(start, end)
-                        for start, end in ranges[batch_start:batch_stop]
-                    ]
-                )
-                for offset, data in results:
-                    f0.seek(offset)
+            async def _download_chunk(start, end):
+                async def _fetch():
+                    kw = self.req_kw.copy()
+                    kw["Range"] = f"bytes={start}-{end}"
+                    resp = await self._call_s3(
+                        "get_object",
+                        Bucket=bucket,
+                        Key=key,
+                        **version_id_kw(version_id),
+                        **kw,
+                    )
+                    try:
+                        return await resp["Body"].read()
+                    finally:
+                        resp["Body"].close()
+
+                async with semaphore:
+                    data = await _error_wrapper(_fetch, retries=self.retries)
+                async with write_lock:
+                    f0.seek(start)
                     f0.write(data)
-                    callback.relative_update(len(data))
+                callback.relative_update(len(data))
+
+            ranges = _get_brange(content_length, chunksize)
+            await asyncio.gather(
+                *[_download_chunk(start, end) for start, end in ranges]
+            )
 
     async def _get_file(
         self,
@@ -1636,27 +1671,29 @@ class S3FileSystem(AsyncFileSystem):
             )
             return resp["Body"], resp.get("ContentLength", None)
 
-        body, content_length = await _open_file(range=0)
-        callback.set_size(content_length)
+        chunksize = chunksize or self.default_transfer_chunksize
 
-        chunksize = chunksize or self.default_block_size
-
-        if (
-            content_length
-            and content_length > chunksize
-            and (max_concurrency or self.max_concurrency) > 1
-        ):
-            body.close()
-            return await self._download_file_part_concurrent(
-                bucket,
-                key,
-                lpath,
-                content_length,
-                chunksize,
-                callback=callback,
-                max_concurrency=max_concurrency,
-                version_id=version_id or vers,
-            )
+        if (max_concurrency or self.max_concurrency) > 1:
+            # Learn the size with a cheap HEAD (no body) so we can dispatch large
+            # files to the concurrent ranged download without first opening — and
+            # discarding — a full streaming GET.
+            content_length = await self._size(rpath)
+            callback.set_size(content_length)
+            if content_length and content_length > chunksize:
+                return await self._download_file_part_concurrent(
+                    bucket,
+                    key,
+                    lpath,
+                    content_length,
+                    chunksize,
+                    callback=callback,
+                    max_concurrency=max_concurrency,
+                    version_id=version_id or vers,
+                )
+            body, content_length = await _open_file(range=0)
+        else:
+            body, content_length = await _open_file(range=0)
+            callback.set_size(content_length)
 
         # Sequential download for small files or concurrency=1
         failed_reads = 0

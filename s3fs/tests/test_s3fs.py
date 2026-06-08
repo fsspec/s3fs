@@ -1089,6 +1089,210 @@ def test_cat_file_parallel(s3, factor):
     assert result == data
 
 
+def test_get_file_default_parallel(s3, tmpdir, monkeypatch):
+    # A file larger than the default transfer chunk size (8 MiB) must
+    # parallelise automatically, without any chunksize/max_concurrency kwargs.
+    data = os.urandom(12 * 2**20)
+    s3.pipe(test_bucket_name + "/default_parallel", data)
+
+    called = {"n": 0}
+    orig = s3._download_file_part_concurrent
+
+    async def spy(*args, **kwargs):
+        called["n"] += 1
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(s3, "_download_file_part_concurrent", spy)
+
+    test_file = str(tmpdir.join("default_parallel"))
+    s3.get_file(test_bucket_name + "/default_parallel", test_file)
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert called["n"] == 1
+
+
+def test_cat_file_default_parallel(s3, monkeypatch):
+    data = os.urandom(12 * 2**20)
+    s3.pipe(test_bucket_name + "/default_parallel_cat", data)
+
+    called = {"n": 0}
+    orig = s3._cat_file_concurrent
+
+    async def spy(*args, **kwargs):
+        called["n"] += 1
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(s3, "_cat_file_concurrent", spy)
+
+    assert s3.cat_file(test_bucket_name + "/default_parallel_cat") == data
+    assert called["n"] == 1
+
+
+def test_get_file_small_stays_sequential(s3, tmpdir, monkeypatch):
+    # Files at or below the transfer chunk size use a single sequential GET.
+    data = os.urandom(2 * 2**20)
+    s3.pipe(test_bucket_name + "/small_seq", data)
+
+    called = {"n": 0}
+    orig = s3._download_file_part_concurrent
+
+    async def spy(*args, **kwargs):
+        called["n"] += 1
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(s3, "_download_file_part_concurrent", spy)
+
+    test_file = str(tmpdir.join("small_seq"))
+    s3.get_file(test_bucket_name + "/small_seq", test_file)
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert called["n"] == 0
+
+
+def test_get_file_max_concurrency_one_sequential(s3, tmpdir, monkeypatch):
+    data = os.urandom(12 * 2**20)
+    s3.pipe(test_bucket_name + "/mc1_get", data)
+
+    called = {"n": 0}
+    orig = s3._download_file_part_concurrent
+
+    async def spy(*args, **kwargs):
+        called["n"] += 1
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(s3, "_download_file_part_concurrent", spy)
+
+    test_file = str(tmpdir.join("mc1_get"))
+    s3.get_file(test_bucket_name + "/mc1_get", test_file, max_concurrency=1)
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert called["n"] == 0
+
+
+def test_cat_file_max_concurrency_one_sequential(s3, monkeypatch):
+    data = os.urandom(12 * 2**20)
+    s3.pipe(test_bucket_name + "/mc1_cat", data)
+
+    called = {"n": 0}
+    orig = s3._cat_file_concurrent
+
+    async def spy(*args, **kwargs):
+        called["n"] += 1
+        return await orig(*args, **kwargs)
+
+    monkeypatch.setattr(s3, "_cat_file_concurrent", spy)
+
+    assert s3.cat_file(test_bucket_name + "/mc1_cat", max_concurrency=1) == data
+    assert called["n"] == 0
+
+
+def test_default_transfer_chunksize_param(s3, tmpdir, monkeypatch):
+    # The constructor parameter controls how a file is split into ranged GETs.
+    s3 = S3FileSystem(
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        default_transfer_chunksize=4 * 2**20,
+    )
+    data = os.urandom(10 * 2**20)
+    s3.pipe(test_bucket_name + "/chunksize_cfg", data)
+
+    ranged_gets = {"n": 0}
+    orig = s3._call_s3
+
+    async def patched(method, *args, **kwargs):
+        if method == "get_object" and "Range" in kwargs:
+            ranged_gets["n"] += 1
+        return await orig(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", patched)
+
+    test_file = str(tmpdir.join("chunksize_cfg"))
+    s3.get_file(test_bucket_name + "/chunksize_cfg", test_file)
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    # 10 MiB split into 4 MiB chunks -> 3 ranged requests.
+    assert ranged_gets["n"] == 3
+
+
+def test_get_file_concurrency_bounded(s3, tmpdir, monkeypatch):
+    # The semaphore must keep at most ``max_concurrency`` ranged GETs in flight.
+    chunksize = 2 * 2**20
+    data = os.urandom(chunksize * 8)  # 8 chunks
+    s3.pipe(test_bucket_name + "/bounded", data)
+
+    max_concurrency = 3
+    state = {"inflight": 0, "peak": 0}
+    orig = s3._call_s3
+
+    async def patched(method, *args, **kwargs):
+        ranged_get = method == "get_object" and "Range" in kwargs
+        if ranged_get:
+            state["inflight"] += 1
+            state["peak"] = max(state["peak"], state["inflight"])
+            await asyncio.sleep(0.05)
+        try:
+            return await orig(method, *args, **kwargs)
+        finally:
+            if ranged_get:
+                state["inflight"] -= 1
+
+    monkeypatch.setattr(s3, "_call_s3", patched)
+
+    test_file = str(tmpdir.join("bounded"))
+    s3.get_file(
+        test_bucket_name + "/bounded",
+        test_file,
+        max_concurrency=max_concurrency,
+        chunksize=chunksize,
+    )
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert state["peak"] == max_concurrency
+
+
+def test_get_file_concurrent_retries_body_read(s3, tmpdir, monkeypatch):
+    # A retryable failure during the streaming body read of one chunk must be
+    # retried (not abort the whole concurrent download).
+    import socket
+
+    chunksize = 5 * 2**20
+    data = os.urandom(chunksize * 3)
+    s3.pipe(test_bucket_name + "/retry_body", data)
+
+    state = {"wrapped": False}
+    orig = s3._call_s3
+
+    class _FailOnceBody:
+        def __init__(self, inner):
+            self._inner = inner
+
+        async def read(self, *args, **kwargs):
+            raise socket.timeout("injected mid-body failure")
+
+        def close(self):
+            return self._inner.close()
+
+    async def patched(method, *args, **kwargs):
+        resp = await orig(method, *args, **kwargs)
+        if method == "get_object" and "Range" in kwargs and not state["wrapped"]:
+            state["wrapped"] = True
+            resp["Body"] = _FailOnceBody(resp["Body"])
+        return resp
+
+    monkeypatch.setattr(s3, "_call_s3", patched)
+
+    test_file = str(tmpdir.join("retry_body"))
+    s3.get_file(
+        test_bucket_name + "/retry_body",
+        test_file,
+        max_concurrency=3,
+        chunksize=chunksize,
+    )
+    with open(test_file, "rb") as f:
+        assert f.read() == data
+    assert state["wrapped"] is True
+
+
 def test_errors(s3):
     with pytest.raises(FileNotFoundError):
         s3.open(test_bucket_name + "/tmp/test/shfoshf", "rb")
