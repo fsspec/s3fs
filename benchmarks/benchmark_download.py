@@ -37,6 +37,15 @@ Generate a custom set of sizes against MinIO::
         --s3-prefix s3://my-bucket/s3fs-bench --generate \\
         --sizes 8MB 64MB 256MB 1GB \\
         --endpoint-url http://localhost:9000
+
+The default size set goes up to multi-GB files (1MB ... 4GB), which is where
+download parallelism matters most. Those are heavy: a full default run moves
+several GB up and down and needs a few GB of temp disk for the download. For
+big files prefer ``--runs 1`` and a trimmed ``--sizes``, e.g.::
+
+    python benchmarks/benchmark_download.py \\
+        --s3-prefix s3://my-bucket/s3fs-bench \\
+        --generate --sizes 1GB 2GB 4GB --runs 1 --aws-cli --cleanup
 """
 
 import argparse

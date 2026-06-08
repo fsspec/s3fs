@@ -34,8 +34,21 @@ import time
 
 # Default set of sizes. Chosen to straddle the 8 MiB transfer-chunk default so
 # both the sequential (small file) and concurrent (large file) paths are
-# exercised, up to sizes where parallelism dominates.
-DEFAULT_SIZES = ["1MB", "8MB", "16MB", "64MB", "128MB", "256MB", "512MB", "1GB"]
+# exercised, up through multi-GB files where download parallelism dominates.
+# The multi-GB sizes make a full default run heavy (several GB up/down and a few
+# GB of temp disk for the download); use --sizes and/or --runs 1 to trim it.
+DEFAULT_SIZES = [
+    "1MB",
+    "8MB",
+    "16MB",
+    "64MB",
+    "128MB",
+    "256MB",
+    "512MB",
+    "1GB",
+    "2GB",
+    "4GB",
+]
 
 _UNITS = {
     "B": 1,

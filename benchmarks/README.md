@@ -18,9 +18,22 @@ python benchmarks/benchmark_download.py \
     --generate --aws-cli --cleanup
 ```
 
-`--generate` uploads the default size set (`1MB … 1GB`); override it with
+`--generate` uploads the default size set (`1MB … 4GB`); override it with
 `--sizes 8MB 64MB 256MB 1GB`. Drop `--cleanup` to keep the objects for repeated
 runs, and drop `--generate` to benchmark objects that already exist.
+
+### Multi-GB files
+
+The default sizes go up to a couple of GB, where download parallelism matters
+most. These are heavy — a full default run moves several GB up and down and
+needs a few GB of free temp disk for the download (set `TMPDIR` to somewhere
+with room). For big files, prefer fewer runs and a trimmed size list:
+
+```bash
+python benchmarks/benchmark_download.py \
+    --s3-prefix s3://my-bucket/s3fs-bench \
+    --generate --sizes 1GB 2GB 4GB --runs 1 --aws-cli --cleanup
+```
 
 The steps below are the same thing split into two scripts, if you prefer to
 generate once and benchmark many times.
