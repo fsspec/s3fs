@@ -7,6 +7,24 @@ downloads are fast out-of-the-box — comparable to `aws s3 cp` without tuning
 > These run against real S3 (or a MinIO endpoint), not moto, since moto has no
 > network latency and so cannot show transfer throughput.
 
+## Quick start (one command)
+
+Point it at a bucket and let it generate the files, upload them, benchmark the
+downloads (vs. `aws s3 cp`), and delete what it created:
+
+```bash
+python benchmarks/benchmark_download.py \
+    --s3-prefix s3://my-bucket/s3fs-bench \
+    --generate --aws-cli --cleanup
+```
+
+`--generate` uploads the default size set (`1MB … 1GB`); override it with
+`--sizes 8MB 64MB 256MB 1GB`. Drop `--cleanup` to keep the objects for repeated
+runs, and drop `--generate` to benchmark objects that already exist.
+
+The steps below are the same thing split into two scripts, if you prefer to
+generate once and benchmark many times.
+
 ## 1. Generate test files
 
 ```bash
