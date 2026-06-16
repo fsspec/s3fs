@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2026.6.0
+--------
+
+- cat should use info (#1029)
+- loosen bounds to allow install from git (#1026)
+- Fix CI (#1024)
+
 2026.4.0
 --------
 
