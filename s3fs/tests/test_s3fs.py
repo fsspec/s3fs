@@ -3341,3 +3341,56 @@ def test_set_session_closed_sessions_rebuilds_once(s3):
         aio_session.AioSession, "_create_client", counting_create_client
     ):
         asyncio.run(run())
+
+
+def test_find_with_prefix_does_not_poison_dircache(s3):
+    data_dir = test_bucket_name + "/splits"
+    s3.touch(data_dir + "/train-00000.parquet")
+    s3.touch(data_dir + "/test-00000.parquet")
+    s3.invalidate_cache()
+
+    train_results = s3.find(data_dir, prefix="train-", maxdepth=1)
+    assert len(train_results) == 1
+    assert data_dir + "/train-00000.parquet" in train_results
+
+    all_files = {f.split("/")[-1] for f in s3.ls(data_dir)}
+    assert all_files == {"train-00000.parquet", "test-00000.parquet"}
+
+
+def test_glob_prefix_does_not_poison_dircache(s3):
+    data_dir = test_bucket_name + "/globs"
+    s3.touch(data_dir + "/train-00000.parquet")
+    s3.touch(data_dir + "/test-00000.parquet")
+    s3.invalidate_cache()
+
+    assert len(s3.glob(data_dir + "/train-*")) == 1
+    test_hits = s3.glob(data_dir + "/test-*")
+    assert len(test_hits) == 1
+    assert data_dir + "/test-00000.parquet" in test_hits
+
+
+def test_find_with_prefix_preserves_existing_full_cache(s3):
+    data_dir = test_bucket_name + "/warm"
+    s3.touch(data_dir + "/train-00000.parquet")
+    s3.touch(data_dir + "/test-00000.parquet")
+    s3.invalidate_cache()
+
+    assert len(s3.ls(data_dir)) == 2
+
+    s3.find(data_dir, prefix="train-", maxdepth=1)
+
+    cached = {f.split("/")[-1] for f in s3.ls(data_dir)}
+    assert cached == {"train-00000.parquet", "test-00000.parquet"}
+
+
+def test_normal_ls_and_find_still_populate_dircache(s3):
+    data_dir = test_bucket_name + "/normal"
+    s3.touch(data_dir + "/file-a")
+    s3.touch(data_dir + "/file-b")
+    s3.invalidate_cache()
+
+    assert data_dir not in s3.dircache
+
+    s3.ls(data_dir)
+    assert data_dir in s3.dircache
+    assert len(s3.dircache[data_dir]) == 2
