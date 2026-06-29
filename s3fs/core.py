@@ -852,6 +852,9 @@ class S3FileSystem(AsyncFileSystem):
         versions=False,
     ):
         bucket, key, _ = self.split_path(path)
+        # A caller-supplied prefix is a stem filter, so the listing is partial
+        # and must not be cached. Capture it before prefix is overwritten below.
+        partial = bool(prefix)
         if not prefix:
             prefix = ""
         if key:
@@ -877,7 +880,7 @@ class S3FileSystem(AsyncFileSystem):
             except ClientError as e:
                 raise translate_boto_error(e)
 
-            if delimiter and files and not versions:
+            if delimiter and files and not versions and not partial:
                 self.dircache[path] = files
             return files
         return self.dircache[path]
