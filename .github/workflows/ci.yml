@@ -38,7 +38,7 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install git+https://github.com/fsspec/filesystem_spec
-          pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}"
+          pip install --upgrade --force-reinstall "aiobotocore${{ matrix.aiobotocore-version }}"
           pip install . --no-deps
           pip list
 
