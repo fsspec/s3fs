@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2026.7.0
+--------
+
+- don't cache prefix-filtered listings as complete directory entries (#1034)
+
 2026.6.0
 --------
 
