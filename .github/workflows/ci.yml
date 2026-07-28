@@ -15,7 +15,7 @@ jobs:
           - "3.12"
           - "3.13"
           - "3.14"
-        aiobotocore-version: [">=2.19.0,<2.20.0", "<3.0.0", "<4.0.0"]
+        aiobotocore-version: ["<4.0.0"]
 
     env:
       BOTO_CONFIG: /dev/null
@@ -38,7 +38,7 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install git+https://github.com/fsspec/filesystem_spec
-          pip install --upgrade "aiobotocore${{ matrix.aiobotocore-version }}"
+          pip install --upgrade --force-reinstall "aiobotocore${{ matrix.aiobotocore-version }}"
           pip install . --no-deps
           pip list
 
