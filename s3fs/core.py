@@ -1754,6 +1754,7 @@ class S3FileSystem(AsyncFileSystem):
                     "StorageClass": out.get("StorageClass", "STANDARD"),
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
+                    "ServerSideEncryption": out.get("ServerSideEncryption"),
                 }
             except FileNotFoundError:
                 pass
