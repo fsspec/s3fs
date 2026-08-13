@@ -2074,9 +2074,73 @@ def test_requester_pays(s3):
     fn = test_bucket_name + "/myfile"
     s3 = S3FileSystem(requester_pays=True, client_kwargs={"endpoint_url": endpoint_uri})
     assert s3.req_kw["RequestPayer"] == "requester"
+    put_kwargs = s3._get_s3_method_kwargs(
+        s3.s3.put_object, Bucket=test_bucket_name, Key="myfile"
+    )
+    assert put_kwargs["RequestPayer"] == "requester"
+    list_kwargs = s3._get_s3_method_kwargs(
+        s3.s3.list_objects_v2, Bucket=test_bucket_name, MaxKeys=1
+    )
+    assert list_kwargs["RequestPayer"] == "requester"
+    assert "RequestPayer" not in s3._get_s3_method_kwargs(s3.s3.list_buckets)
     s3.touch(fn)
     with s3.open(fn, "rb") as f:
         assert f.req_kw["RequestPayer"] == "requester"
+
+
+@pytest.mark.parametrize(
+    "filesystem_requester_pays,file_requester_pays,expected",
+    [(False, True, True), (True, False, False)],
+)
+@pytest.mark.parametrize("method", ["get_object", "put_object"])
+def test_requester_pays_per_file_override(
+    filesystem_requester_pays,
+    file_requester_pays,
+    expected,
+    method,
+):
+    fn = test_bucket_name + "/myfile"
+    s3 = S3FileSystem(
+        requester_pays=filesystem_requester_pays,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        skip_instance_cache=True,
+    )
+    f = s3fs.core.S3File(s3, fn, mode="rb", requester_pays=file_requester_pays, size=0)
+    request_kwargs = s3._get_s3_method_kwargs(
+        getattr(s3.s3, method),
+        f.s3_additional_kwargs,
+        f._request_payer_kw,
+        Bucket=test_bucket_name,
+        Key="myfile",
+    )
+    f.close()
+
+    assert ("RequestPayer" in request_kwargs) is expected
+    if expected:
+        assert request_kwargs["RequestPayer"] == "requester"
+
+
+def test_requester_pays_makedirs_uses_object_listing():
+    class MetadataRestrictedS3FileSystem(S3FileSystem):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.calls = []
+
+        async def _call_s3(self, method, *akwarglist, **kwargs):
+            self.calls.append(method)
+            if method == "list_objects_v2":
+                return {"Contents": []}
+            raise PermissionError("Bucket metadata is not accessible")
+
+    s3 = MetadataRestrictedS3FileSystem(
+        requester_pays=True,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        skip_instance_cache=True,
+    )
+    s3.makedirs("requester-pays-bucket/checkpoints/run", exist_ok=True)
+
+    assert s3.calls == ["head_bucket", "get_bucket_location", "list_objects_v2"]
+    assert "create_bucket" not in s3.calls
 
 
 def test_credentials():
