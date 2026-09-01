@@ -3055,10 +3055,13 @@ def test_exist_after_delete(s3):
 # condition: True if running on botocore < 1.36.0
 # The below tests for exclusive writes will fail on older versions of botocore.
 old_botocore = version.parse(botocore.__version__) < version.parse("1.36.0")
+old_moto = version.parse(moto.__version__) < version.parse("5.1.11")
 
 
 @pytest.mark.xfail(
-    reason="moto doesn't support IfNoneMatch for MPU when object created via MPU"
+    old_moto,
+    reason="moto<5.1.11 doesn't support IfNoneMatch for MPU when object created via MPU",
+    strict=True,
 )
 def test_pipe_exclusive_big(s3):
     chunksize = 5 * 2**20  # minimum allowed
@@ -3098,7 +3101,9 @@ def test_pipe_exclusive_big_after_small(s3):
 
 
 @pytest.mark.xfail(
-    reason="moto doesn't support IfNoneMatch for MPU when object created via MPU"
+    old_moto,
+    reason="moto<5.1.11 doesn't support IfNoneMatch for MPU when object created via MPU",
+    strict=True,
 )
 def test_put_exclusive_big(s3, tmpdir):
     chunksize = 5 * 2**20  # minimum allowed
