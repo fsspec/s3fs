@@ -207,10 +207,11 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
         tb = err.__traceback__
         while tb.tb_next:
             tb = tb.tb_next
-        try:
-            await tb.tb_frame.f_locals["response"]
-        except Exception as e:
-            err = e
+        if "response" in tb.tb_frame.f_locals:
+            try:
+                await tb.tb_frame.f_locals["response"]
+            except Exception as e:
+                err = e
     err = translate_boto_error(err)
     raise err
 
