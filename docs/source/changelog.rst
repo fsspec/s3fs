@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Dev
+---
+
+- Preserve the original coroutine-related error when its traceback has no response (#1011)
+
 2026.7.0
 --------
 

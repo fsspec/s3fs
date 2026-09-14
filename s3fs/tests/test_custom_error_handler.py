@@ -26,6 +26,32 @@ class CustomNonRetryableError(Exception):
     pass
 
 
+def test_coroutine_error_without_response_preserves_original():
+    error = TypeError("'coroutine' object is not subscriptable")
+
+    async def failing_func():
+        raise error
+
+    with pytest.raises(TypeError) as exc:
+        asyncio.run(_error_wrapper(failing_func, retries=1))
+    assert exc.value is error
+
+
+def test_coroutine_error_recovers_response_exception():
+    async def response_error():
+        raise ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Access denied"}},
+            "PutObject",
+        )
+
+    async def failing_func():
+        response = response_error()
+        return response["Body"]
+
+    with pytest.raises(PermissionError, match="Access denied"):
+        asyncio.run(_error_wrapper(failing_func, retries=1))
+
+
 @pytest.fixture(autouse=True)
 def reset_error_handler():
     """Reset the custom error handler and retryable errors after each test."""
