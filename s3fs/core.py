@@ -1368,7 +1368,7 @@ class S3FileSystem(AsyncFileSystem):
                 **version_id_kw(version_id),
                 **kw,
             )
-            data = await resp["Body"].read()
+            data = await _error_wrapper(resp["Body"].read, retries=self.retries)
             resp["Body"].close()
             return start, data
 
