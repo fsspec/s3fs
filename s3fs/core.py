@@ -918,7 +918,8 @@ class S3FileSystem(AsyncFileSystem):
         config = {}
         if max_items is not None:
             config.update(MaxItems=max_items, PageSize=2 * max_items)
-        it = pag.paginate(
+        it = self._paginate_with_retries(
+            pag,
             Bucket=bucket,
             Prefix=prefix,
             Delimiter=delimiter,
@@ -941,6 +942,17 @@ class S3FileSystem(AsyncFileSystem):
                     c["size"] = c["Size"]
                     self._fill_info(c, bucket, versions=versions)
                     yield c
+
+    def _paginate_with_retries(self, paginator, **kwargs):
+        # The paginator calls the client method directly, bypassing the retry
+        # logic every other request gets via _call_s3, so a transient error on
+        # any page fails (or silently truncates) the whole listing (#982).
+        it = paginator.paginate(**kwargs)
+        make_request = it._make_request
+        it._make_request = lambda kw: _error_wrapper(
+            make_request, args=(kw,), retries=self.retries
+        )
+        return it
 
     @staticmethod
     def _fill_info(f, bucket, versions=False):
@@ -2418,7 +2430,9 @@ class S3FileSystem(AsyncFileSystem):
         await self.set_session()
         s3 = await self.get_s3(bucket)
         pag = s3.get_paginator("list_object_versions")
-        async for plist in pag.paginate(Bucket=bucket, **self.req_kw):
+        async for plist in self._paginate_with_retries(
+            pag, Bucket=bucket, **self.req_kw
+        ):
             obs = plist.get("Versions", []) + plist.get("DeleteMarkers", [])
             delete_keys = {
                 "Objects": [
