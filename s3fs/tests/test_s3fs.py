@@ -3216,6 +3216,33 @@ def test_find_ls_fail(s3):
     assert out == out0
 
 
+def test_slash_only_key(s3):
+    # https://github.com/fsspec/s3fs/issues/953
+    client = get_boto3_client()
+    client.put_object(Bucket=test_bucket_name, Key="/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="slash/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="slash//deep", Body=b"data")
+    s3.pipe(f"{test_bucket_name}/slash/file", b"data")
+    s3.invalidate_cache()
+
+    listing = s3.ls(test_bucket_name, detail=False)
+    assert f"{test_bucket_name}/" not in listing
+    assert f"{test_bucket_name}/slash" in listing
+    assert s3.ls(f"{test_bucket_name}/slash", detail=False) == [
+        f"{test_bucket_name}/slash/",
+        f"{test_bucket_name}/slash/file",
+    ]
+
+    for root, dirs, _ in s3.walk(test_bucket_name):
+        assert "" not in dirs
+        assert root.count("/") < 3
+
+    found = s3.find(test_bucket_name, withdirs=True)
+    assert f"{test_bucket_name}/" not in found
+    assert f"{test_bucket_name}//" not in found
+    assert f"{test_bucket_name}/slash//deep" in found
+
+
 def test_find_missing_ls(s3):
     # https://github.com/fsspec/s3fs/issues/988#issuecomment-3436727753
     BUCKET = test_bucket_name

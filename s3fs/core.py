@@ -927,6 +927,10 @@ class S3FileSystem(AsyncFileSystem):
         )
         async for i in it:
             for l in i.get("CommonPrefixes", []):
+                if prefix[-1:] in ("", "/") and l["Prefix"] == prefix + "/":
+                    # keys like "/" or "dir//" give an empty-named prefix that
+                    # would list as the directory itself, so walk loops on it
+                    continue
                 c = {
                     "Key": l["Prefix"][:-1],
                     "Size": 0,
@@ -936,6 +940,9 @@ class S3FileSystem(AsyncFileSystem):
                 self._fill_info(c, bucket, versions=False)
                 yield c
             for c in i.get(contents_key, []):
+                if c["Key"] == "/":
+                    # a key of just "/" has no name below the bucket
+                    continue
                 if not self.version_aware or c.get("IsLatest") or versions:
                     c["type"] = "file"
                     c["size"] = c["Size"]
