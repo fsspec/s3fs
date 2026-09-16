@@ -1153,16 +1153,16 @@ def test_errors_cause_preservings(monkeypatch, s3):
 def test_listing_retries_transient_errors(monkeypatch, s3):
     # a transient error on a listing page is retried like any other call (#982)
     expected = s3.find(test_bucket_name)
-    list_objects_v2 = type(s3.s3).list_objects_v2
+    original = type(s3.s3).list_objects_v2
     calls = []
 
-    async def flaky_list_objects_v2(self, *args, **kwargs):
+    async def list_objects_v2(self, *args, **kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
             raise socket.timeout
-        return await list_objects_v2(self, *args, **kwargs)
+        return await original(self, *args, **kwargs)
 
-    monkeypatch.setattr(type(s3.s3), "list_objects_v2", flaky_list_objects_v2)
+    monkeypatch.setattr(type(s3.s3), "list_objects_v2", list_objects_v2)
     s3.invalidate_cache()
 
     assert s3.find(test_bucket_name) == expected
