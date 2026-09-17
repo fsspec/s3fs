@@ -2395,12 +2395,24 @@ class S3FileSystem(AsyncFileSystem):
             batch_size=3,
             nofiles=True,
         )
+        if recursive:
+            # listings skip a key of just "/", so remove it before the bucket
+            await asyncio.gather(
+                *[self._rm_slash_key(self.split_path(d)[0]) for d in dirs]
+            )
         await asyncio.gather(*[self._rmdir(d) for d in dirs])
         [
             (self.invalidate_cache(p), self.invalidate_cache(self._parent(p)))
             for p in paths
         ]
         return sum(out, [])
+
+    async def _rm_slash_key(self, bucket):
+        try:
+            await self._call_s3("head_object", Bucket=bucket, Key="/")
+        except (FileNotFoundError, PermissionError):
+            return
+        await self._call_s3("delete_object", Bucket=bucket, Key="/")
 
     async def _is_bucket_versioned(self, bucket):
         return (await self._call_s3("get_bucket_versioning", Bucket=bucket)).get(
