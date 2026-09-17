@@ -936,7 +936,7 @@ class S3FileSystem(AsyncFileSystem):
                     c["size"] = c["Size"]
                     self._fill_info(c, bucket, versions=versions)
                     yield c
-            if remaining == 0:
+            if remaining <= 0:
                 return
 
     async def _list_pages(self, method, **kwargs):
