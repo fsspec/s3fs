@@ -4,6 +4,7 @@ Changelog
 Dev
 ---
 
+- retry transient errors on each page of a listing instead of failing or truncating it (#982)
 - Preserve the original coroutine-related error when its traceback has no response (#1011)
 
 2026.7.0

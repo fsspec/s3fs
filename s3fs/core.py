@@ -906,26 +906,17 @@ class S3FileSystem(AsyncFileSystem):
             raise ValueError(
                 "versions cannot be specified if the filesystem is not version aware"
             )
-        await self.set_session()
-        s3 = await self.get_s3(bucket)
         if self.version_aware:
             method = "list_object_versions"
             contents_key = "Versions"
         else:
             method = "list_objects_v2"
             contents_key = "Contents"
-        pag = s3.get_paginator(method)
-        config = {}
+        kwargs = dict(Bucket=bucket, Prefix=prefix, Delimiter=delimiter, **self.req_kw)
         if max_items is not None:
-            config.update(MaxItems=max_items, PageSize=2 * max_items)
-        it = pag.paginate(
-            Bucket=bucket,
-            Prefix=prefix,
-            Delimiter=delimiter,
-            PaginationConfig=config,
-            **self.req_kw,
-        )
-        async for i in it:
+            kwargs["MaxKeys"] = 2 * max_items
+        remaining = max_items
+        async for i in self._list_pages(method, **kwargs):
             for l in i.get("CommonPrefixes", []):
                 c = {
                     "Key": l["Prefix"][:-1],
@@ -935,12 +926,33 @@ class S3FileSystem(AsyncFileSystem):
                 }
                 self._fill_info(c, bucket, versions=False)
                 yield c
-            for c in i.get(contents_key, []):
+            contents = i.get(contents_key, [])
+            if remaining is not None:
+                contents = contents[:remaining]
+                remaining -= len(contents)
+            for c in contents:
                 if not self.version_aware or c.get("IsLatest") or versions:
                     c["type"] = "file"
                     c["size"] = c["Size"]
                     self._fill_info(c, bucket, versions=versions)
                     yield c
+            if remaining is not None and remaining <= 0:
+                return
+
+    async def _list_pages(self, method, **kwargs):
+        # Each page goes through _call_s3, so a transient error on one page is
+        # retried like any other request instead of failing (or silently
+        # truncating) the whole listing, as the paginator did (#982).
+        while True:
+            out = await self._call_s3(method, **kwargs)
+            yield out
+            if not out.get("IsTruncated"):
+                return
+            if method == "list_object_versions":
+                kwargs["KeyMarker"] = out.get("NextKeyMarker", "")
+                kwargs["VersionIdMarker"] = out.get("NextVersionIdMarker", "")
+            else:
+                kwargs["ContinuationToken"] = out["NextContinuationToken"]
 
     @staticmethod
     def _fill_info(f, bucket, versions=False):
@@ -2415,10 +2427,9 @@ class S3FileSystem(AsyncFileSystem):
 
     async def _rm_versioned_bucket_contents(self, bucket):
         """Remove a versioned bucket and all contents"""
-        await self.set_session()
-        s3 = await self.get_s3(bucket)
-        pag = s3.get_paginator("list_object_versions")
-        async for plist in pag.paginate(Bucket=bucket, **self.req_kw):
+        async for plist in self._list_pages(
+            "list_object_versions", Bucket=bucket, **self.req_kw
+        ):
             obs = plist.get("Versions", []) + plist.get("DeleteMarkers", [])
             delete_keys = {
                 "Objects": [
