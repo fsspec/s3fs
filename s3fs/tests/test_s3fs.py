@@ -3216,6 +3216,70 @@ def test_find_ls_fail(s3):
     assert out == out0
 
 
+def test_slash_only_key(s3):
+    # https://github.com/fsspec/s3fs/issues/953
+    client = get_boto3_client()
+    client.put_object(Bucket=test_bucket_name, Key="/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="slash/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="slash//deep", Body=b"data")
+    s3.pipe(f"{test_bucket_name}/slash/file", b"data")
+    s3.invalidate_cache()
+
+    listing = s3.ls(test_bucket_name, detail=False)
+    assert f"{test_bucket_name}/" not in listing
+    assert f"{test_bucket_name}/slash" in listing
+    assert s3.ls(f"{test_bucket_name}/slash", detail=False) == [
+        f"{test_bucket_name}/slash/",
+        f"{test_bucket_name}/slash/file",
+    ]
+
+    for root, dirs, _ in s3.walk(test_bucket_name):
+        assert "" not in dirs
+        assert root.count("/") < 3
+
+    found = s3.find(test_bucket_name, withdirs=True)
+    assert f"{test_bucket_name}/" not in found
+    assert f"{test_bucket_name}//" not in found
+    assert f"{test_bucket_name}/slash//deep" in found
+
+
+@pytest.mark.parametrize("body", [b"", b"data"])
+def test_slash_only_key_keeps_placeholders(s3, tmpdir, body):
+    # placeholder keys ending in a single "/" must behave as before (#953)
+    client = get_boto3_client()
+    client.put_object(Bucket=test_bucket_name, Key="/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="ph/", Body=body)
+    client.put_object(Bucket=test_bucket_name, Key="ph/file", Body=b"data")
+    client.put_object(Bucket=test_bucket_name, Key="phonly/", Body=body)
+    s3.invalidate_cache()
+    ph = f"{test_bucket_name}/ph"
+    phonly = f"{test_bucket_name}/phonly"
+
+    assert s3.isdir(ph) and s3.isdir(phonly)
+    assert s3.info(ph)["type"] == "directory"
+    assert s3.ls(ph, detail=False) == [f"{ph}/", f"{ph}/file"]
+    assert s3.ls(phonly, detail=False) == [f"{phonly}/"]
+    found = s3.find(test_bucket_name, withdirs=True)
+    assert f"{test_bucket_name}/" not in found
+    assert f"{test_bucket_name}//" not in found
+    assert [f for f in found if f.startswith(f"{test_bucket_name}/ph")] == [
+        ph,
+        f"{ph}/",
+        f"{ph}/file",
+        phonly,
+        f"{phonly}/",
+    ]
+
+    s3.cp(ph, f"{test_bucket_name}/copied", recursive=True)
+    assert s3.cat(f"{test_bucket_name}/copied/file") == b"data"
+    s3.get(ph, str(tmpdir / "got"), recursive=True)
+    assert (tmpdir / "got" / "file").read_binary() == b"data"
+
+    s3.rm(ph, recursive=True)
+    assert not s3.exists(ph)
+    assert s3.isdir(phonly)
+
+
 def test_find_missing_ls(s3):
     # https://github.com/fsspec/s3fs/issues/988#issuecomment-3436727753
     BUCKET = test_bucket_name
