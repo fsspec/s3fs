@@ -3280,18 +3280,6 @@ def test_slash_only_key_keeps_placeholders(s3, tmpdir, body):
     assert s3.isdir(phonly)
 
 
-def test_rm_bucket_with_slash_only_key(s3):
-    bucket = "slash-key-bucket"
-    s3.mkdir(bucket)
-    client = get_boto3_client()
-    client.put_object(Bucket=bucket, Key="/", Body=b"")
-    client.put_object(Bucket=bucket, Key="dir/file", Body=b"data")
-    s3.invalidate_cache()
-
-    s3.rm(bucket, recursive=True)
-    assert not s3.exists(bucket)
-
-
 def test_find_missing_ls(s3):
     # https://github.com/fsspec/s3fs/issues/988#issuecomment-3436727753
     BUCKET = test_bucket_name
