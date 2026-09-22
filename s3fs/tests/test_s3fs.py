@@ -718,6 +718,134 @@ def test_bulk_delete(s3):
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
 
 
+@pytest.mark.parametrize("asynchronous", [False, True])
+@pytest.mark.parametrize("partial", [False, True])
+def test_rm_partial_delete_errors(s3, asynchronous, partial):
+    parent = f"{test_bucket_name}/bulk-delete"
+    denied = [f"{parent}/denied-1", f"{parent}/denied-2"]
+    allowed = [f"{parent}/allowed"] if partial else []
+    paths = allowed + denied
+    for path in paths:
+        s3.touch(path)
+    get_boto3_client().put_bucket_policy(
+        Bucket=test_bucket_name,
+        Policy=json.dumps(
+            {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Deny",
+                        "Principal": "*",
+                        "Action": "s3:DeleteObject",
+                        "Resource": [f"arn:aws:s3:::{path}" for path in denied],
+                    }
+                ],
+            }
+        ),
+    )
+
+    if asynchronous:
+
+        async def remove():
+            fs = S3FileSystem(
+                asynchronous=True,
+                client_kwargs={"endpoint_url": endpoint_uri},
+            )
+            client = await fs.set_session()
+            try:
+                await fs._ls(parent)
+                assert parent in fs.dircache
+                with pytest.raises(PermissionError, match="Access Denied") as exc:
+                    await fs._rm(paths)
+                assert parent not in fs.dircache
+                return exc.value
+            finally:
+                await client.close()
+
+        error = asyncio.run(remove())
+    else:
+        s3.ls(parent)
+        assert parent in s3.dircache
+        with pytest.raises(PermissionError, match="Access Denied") as exc:
+            s3.rm(paths)
+        assert parent not in s3.dircache
+        error = exc.value
+
+    response = error.__cause__.response
+    assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
+    assert {e["Key"] for e in response["Errors"]} == {
+        path.split("/", 1)[1] for path in denied
+    }
+    assert denied[0] in str(error)
+    s3.invalidate_cache()
+    assert all(s3.exists(path) for path in denied)
+    assert not any(s3.exists(path) for path in allowed)
+
+
+@pytest.mark.parametrize(
+    "code,exception",
+    [
+        ("AccessDenied", PermissionError),
+        ("InternalError", OSError),
+        ("Unknown", OSError),
+    ],
+)
+def test_rm_quiet_delete_errors(s3, monkeypatch, code, exception):
+    key = "nested/file1"
+    response = {
+        "Errors": [{"Key": key, "Code": code, "Message": "Could not delete"}],
+        "ResponseMetadata": {"HTTPStatusCode": 200},
+    }
+
+    async def delete_objects(*args, **kwargs):
+        assert kwargs["Delete"]["Quiet"] is True
+        return response
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    with pytest.raises(exception, match="Could not delete") as exc:
+        s3.rm(f"{test_bucket_name}/{key}")
+    assert exc.value.__cause__.response["Errors"] == response["Errors"]
+    assert exc.value.__cause__.operation_name == "DeleteObjects"
+
+
+@pytest.mark.parametrize("response", [{}, {"Errors": []}])
+def test_rm_quiet_delete_success(s3, monkeypatch, response):
+    async def delete_objects(*args, **kwargs):
+        assert kwargs["Delete"]["Quiet"] is True
+        return response
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    assert s3.rm(f"{test_bucket_name}/nested/file1") == []
+
+
+def test_rm_delete_error_after_successful_batch(s3, monkeypatch):
+    parent = f"{test_bucket_name}/batches"
+    paths = [f"{parent}/{i:04}" for i in range(1001)]
+    s3.dircache[parent] = [{"name": path, "type": "file", "size": 0} for path in paths]
+    calls = []
+
+    async def delete_objects(*args, **kwargs):
+        objects = kwargs["Delete"]["Objects"]
+        calls.append(objects)
+        if len(objects) == 1000:
+            return {}
+        return {
+            "Errors": [
+                {
+                    "Key": objects[0]["Key"],
+                    "Code": "AccessDenied",
+                    "Message": "Access Denied",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    with pytest.raises(PermissionError, match="Access Denied"):
+        s3.rm(paths)
+    assert sorted(len(objects) for objects in calls) == [1, 1000]
+    assert parent not in s3.dircache
+
+
 @pytest.mark.xfail(reason="anon user is still privileged on moto")
 def test_anonymous_access(s3):
     with ignoring(NoCredentialsError):
