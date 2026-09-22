@@ -2369,8 +2369,13 @@ class S3FileSystem(AsyncFileSystem):
         out = await self._call_s3(
             "delete_objects", kwargs, Bucket=bucket, Delete=delete_keys
         )
-        # TODO: we report on successes but don't raise on any errors, effectively
-        #  on_error="omit"
+        if out.get("Errors"):
+            error = out["Errors"][0]
+            # Preserve the complete response when only some objects failed.
+            exception = ClientError({**out, "Error": error}, "DeleteObjects")
+            raise translate_boto_error(
+                exception, f"Failed to delete {bucket}/{error['Key']}: {exception}"
+            )
         return [f"{bucket}/{_['Key']}" for _ in out.get("Deleted", [])]
 
     async def _rm_file(self, path, **kwargs):

@@ -1,6 +1,11 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
+
 2026.9.0
 --------
 
