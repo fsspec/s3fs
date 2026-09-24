@@ -12,7 +12,7 @@ Unreleased
 - retry transient errors on each page of a listing instead of failing or truncating it (#982, 1042)
 - Preserve the original coroutine-related error when its traceback has no response (#1011)
 - version-guard the big exclusive-write xfails (#1040)
-· Fix requester pays issues (#1039)
+- Fix requester pays issues (#1039)
 
 
 2026.7.0
