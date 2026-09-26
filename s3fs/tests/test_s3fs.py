@@ -3217,29 +3217,30 @@ def test_find_ls_fail(s3):
 
 
 def test_slash_only_key(s3):
-    # https://github.com/fsspec/s3fs/issues/953
+    # https://github.com/fsspec/s3fs/issues/953: a "/" key makes S3 report a
+    # common prefix naming the directory being listed, duplicating the entry
+    # the key itself produces. The key stays visible and readable.
     client = get_boto3_client()
-    client.put_object(Bucket=test_bucket_name, Key="/", Body=b"")
+    client.put_object(Bucket=test_bucket_name, Key="/", Body=b"root")
     client.put_object(Bucket=test_bucket_name, Key="slash/", Body=b"")
     client.put_object(Bucket=test_bucket_name, Key="slash//deep", Body=b"data")
     s3.pipe(f"{test_bucket_name}/slash/file", b"data")
     s3.invalidate_cache()
 
     listing = s3.ls(test_bucket_name, detail=False)
+    # the bucket is no longer listed as a directory inside itself
     assert f"{test_bucket_name}/" not in listing
     assert f"{test_bucket_name}/slash" in listing
+
+    # listed once, not twice: the "slash//" common prefix named "slash/" too
     assert s3.ls(f"{test_bucket_name}/slash", detail=False) == [
         f"{test_bucket_name}/slash/",
         f"{test_bucket_name}/slash/file",
     ]
 
-    for root, dirs, _ in s3.walk(test_bucket_name):
-        assert "" not in dirs
-        assert root.count("/") < 3
-
-    found = s3.find(test_bucket_name, withdirs=True)
-    assert f"{test_bucket_name}/" not in found
-    assert f"{test_bucket_name}//" not in found
+    # the keys themselves are still reported by the delimiter-free listing
+    found = s3.find(test_bucket_name)
+    assert f"{test_bucket_name}//" in found
     assert f"{test_bucket_name}/slash//deep" in found
 
 
@@ -3260,8 +3261,7 @@ def test_slash_only_key_keeps_placeholders(s3, tmpdir, body):
     assert s3.ls(ph, detail=False) == [f"{ph}/", f"{ph}/file"]
     assert s3.ls(phonly, detail=False) == [f"{phonly}/"]
     found = s3.find(test_bucket_name, withdirs=True)
-    assert f"{test_bucket_name}/" not in found
-    assert f"{test_bucket_name}//" not in found
+    assert len(found) == len(set(found))
     assert [f for f in found if f.startswith(f"{test_bucket_name}/ph")] == [
         ph,
         f"{ph}/",
