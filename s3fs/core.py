@@ -1380,8 +1380,10 @@ class S3FileSystem(AsyncFileSystem):
                 **version_id_kw(version_id),
                 **kw,
             )
-            data = await resp["Body"].read()
-            resp["Body"].close()
+            try:
+                data = await resp["Body"].read()
+            finally:
+                resp["Body"].close()
             return start, data
 
         ranges = list(_get_brange(content_length, chunksize))
@@ -1611,8 +1613,10 @@ class S3FileSystem(AsyncFileSystem):
                 **version_id_kw(version_id),
                 **kw,
             )
-            data = await resp["Body"].read()
-            resp["Body"].close()
+            try:
+                data = await resp["Body"].read()
+            finally:
+                resp["Body"].close()
             return start, data
 
         ranges = list(_get_brange(content_length, chunksize))

@@ -1225,6 +1225,54 @@ def test_get_file_parallel_integrity(s3, tmpdir, factor):
         assert f.read() == data
 
 
+@pytest.mark.parametrize("method", ["get_file", "cat_file"])
+@pytest.mark.parametrize("error", [None, OSError, asyncio.CancelledError])
+def test_parallel_download_closes_bodies(tmp_path, monkeypatch, method, error):
+    data = b"parallel download"
+    bodies = []
+    ranges = []
+
+    class Body(io.BytesIO):
+        async def read(self, *args):
+            if error is not None:
+                raise error("interrupted read")
+            return super().read(*args)
+
+    async def get_object(method, **kwargs):
+        assert method == "get_object"
+        if "Range" in kwargs:
+            ranges.append(kwargs["Range"])
+            start, end = map(int, kwargs["Range"].removeprefix("bytes=").split("-"))
+            body = Body(data[start : end + 1])
+        else:
+            body = Body(data)
+        bodies.append(body)
+        return {"Body": body, "ContentLength": len(body.getvalue())}
+
+    fs = S3FileSystem(asynchronous=True, skip_instance_cache=True)
+    monkeypatch.setattr(fs, "_call_s3", get_object)
+    destination = tmp_path / "download"
+
+    async def size(path):
+        return len(data)
+
+    monkeypatch.setattr(fs, "_size", size)
+    if method == "get_file":
+        download = fs._get_file(
+            "test/download", destination, chunksize=10, max_concurrency=2
+        )
+    else:
+        download = fs._cat_file("test/download", chunksize=10, max_concurrency=2)
+    if error is None:
+        result = asyncio.run(download)
+        assert (destination.read_bytes() if method == "get_file" else result) == data
+    else:
+        with pytest.raises(error):
+            asyncio.run(download)
+    assert ranges == ["bytes=0-9", "bytes=10-16"]
+    assert all(body.closed for body in bodies)
+
+
 @pytest.mark.parametrize("size", [2**10, 10 * 2**20])
 def test_put_file_with_callback(s3, tmpdir, size):
     test_file = str(tmpdir.join("test.json"))
