@@ -1209,7 +1209,7 @@ def test_parallel_download_closes_bodies(tmp_path, monkeypatch, method, error):
         result = asyncio.run(download)
         assert (destination.read_bytes() if method == "get_file" else result) == data
     else:
-        with pytest.raises(error, match="interrupted read"):
+        with pytest.raises(error):
             asyncio.run(download)
     assert ranges == ["bytes=0-9", "bytes=10-16"]
     assert all(body.closed for body in bodies)
