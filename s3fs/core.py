@@ -1756,6 +1756,7 @@ class S3FileSystem(AsyncFileSystem):
                     if out:
                         return out[0]
                     return {"name": path, "size": 0, "type": "directory"}
+        head_error = None
         if key:
             try:
                 out = await self._call_s3(
@@ -1777,6 +1778,12 @@ class S3FileSystem(AsyncFileSystem):
                 }
             except FileNotFoundError:
                 pass
+            except PermissionError as e:
+                if version_id is not None:
+                    raise
+                # Prefix-scoped access can allow listing key/ while denying
+                # HeadObject for key itself. Check for a directory before failing.
+                head_error = e
             except ClientError as e:
                 raise translate_boto_error(e, set_cause=False)
         else:
@@ -1815,7 +1822,13 @@ class S3FileSystem(AsyncFileSystem):
                     "StorageClass": "DIRECTORY",
                 }
 
+            if head_error is not None:
+                raise head_error
             raise FileNotFoundError(path)
+        except FileNotFoundError:
+            if head_error is not None:
+                raise head_error
+            raise
         except ClientError as e:
             raise translate_boto_error(e, set_cause=False)
         except ParamValidationError as e:

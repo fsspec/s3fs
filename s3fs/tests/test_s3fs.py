@@ -22,7 +22,7 @@ import botocore
 import s3fs.core
 from s3fs.core import MAX_UPLOAD_PARTS, S3FileSystem, calculate_chunksize
 from s3fs.utils import ignoring, SSEParams, FileExpired
-from botocore.exceptions import NoCredentialsError
+from botocore.exceptions import ClientError, NoCredentialsError
 from fsspec.asyn import sync
 from fsspec.callbacks import Callback
 from packaging import version
@@ -280,6 +280,64 @@ def test_info(s3):
         s3.ls(new_parent)
     with pytest.raises(FileNotFoundError):
         s3.info(new_parent)
+
+
+def test_info_prefix_permissions(s3, monkeypatch):
+    path = f"{test_bucket_name}/prefix"
+    s3.touch(path)
+    s3.touch(f"{path}/nested/file")
+    assert s3.info(path)["type"] == "file"
+
+    error = ClientError(
+        {"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject"
+    )
+
+    async def head_object(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(type(s3.s3), "head_object", head_object)
+    assert s3.info(path)["type"] == "directory"
+    assert s3.exists(path)
+
+    with pytest.raises(PermissionError, match="Forbidden") as exc:
+        s3.info(f"{test_bucket_name}/missing")
+    assert exc.value.__cause__ is error
+
+
+@pytest.mark.parametrize("code", ["403", "404"])
+def test_info_denied_listing(s3, monkeypatch, code):
+    head_error = ClientError(
+        {"Error": {"Code": "403", "Message": "HeadObject denied"}}, "HeadObject"
+    )
+    list_error = ClientError({"Error": {"Code": code}}, "ListObjectsV2")
+
+    async def head_object(*args, **kwargs):
+        raise head_error
+
+    async def list_objects_v2(*args, **kwargs):
+        raise list_error
+
+    monkeypatch.setattr(type(s3.s3), "head_object", head_object)
+    monkeypatch.setattr(type(s3.s3), "list_objects_v2", list_objects_v2)
+    with pytest.raises(PermissionError) as exc:
+        s3.exists(f"{test_bucket_name}/prefix")
+    assert exc.value.__cause__ is (head_error if code == "404" else list_error)
+
+
+def test_info_denied_version(s3, monkeypatch):
+    path = f"{test_bucket_name}/prefix"
+    s3.touch(f"{path}/file")
+    s3.version_aware = True
+
+    async def head_object(*args, **kwargs):
+        assert kwargs["VersionId"] == "version"
+        raise ClientError(
+            {"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject"
+        )
+
+    monkeypatch.setattr(type(s3.s3), "head_object", head_object)
+    with pytest.raises(PermissionError, match="Forbidden"):
+        s3.info(f"{path}?versionId=version")
 
 
 def test_info_cached(s3):
