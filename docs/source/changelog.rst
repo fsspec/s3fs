@@ -6,6 +6,7 @@ Unreleased
 
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
+- Skip the HEAD request before reading a whole object in ``cat_file`` (#1052)
 
 2026.9.0
 --------
