@@ -1324,6 +1324,27 @@ def test_cat_file_parallel(s3, factor):
     assert result == data
 
 
+@pytest.mark.parametrize("size", [5, 3 * 2**20])
+def test_cat_file_no_head_request(s3, monkeypatch, size):
+    path = test_bucket_name + "/cat_no_head"
+    data = os.urandom(size)
+    s3.pipe(path, data)
+    s3.invalidate_cache()
+
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def recording_call_s3(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", recording_call_s3)
+    assert s3.cat_file(path, chunksize=2**20) == data
+    assert "head_object" not in calls
+    if size <= 2**20:
+        assert calls == ["get_object"]
+
+
 def test_errors(s3):
     with pytest.raises(FileNotFoundError):
         s3.open(test_bucket_name + "/tmp/test/shfoshf", "rb")
