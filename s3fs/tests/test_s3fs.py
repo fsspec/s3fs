@@ -18,6 +18,7 @@ from itertools import chain
 import fsspec.core
 from dateutil.tz import tzutc
 
+import aiobotocore.session
 import botocore
 import s3fs.core
 from s3fs.core import MAX_UPLOAD_PARTS, S3FileSystem, calculate_chunksize
@@ -1401,6 +1402,109 @@ def test_listing_retries_transient_errors(monkeypatch, s3):
 
     assert s3.find(test_bucket_name) == expected
     assert len(calls) == 2
+
+
+def _expired_token_error(operation_name):
+    return ClientError(
+        {"Error": {"Code": "ExpiredToken", "Message": "The token has expired."}},
+        operation_name,
+    )
+
+
+def test_expired_token_refreshes_owned_session(monkeypatch, s3):
+    # an expired token rebuilds the session so new credentials are used (#632)
+    path = test_bucket_name + "/test/accounts.1.json"
+    expected = s3.cat(path)
+    stale_client = s3.s3
+
+    async def get_object(**kwargs):
+        raise _expired_token_error("GetObject")
+
+    monkeypatch.setattr(stale_client, "get_object", get_object)
+
+    assert s3.cat(path) == expected
+    assert s3.s3 is not stale_client
+
+
+def test_expired_token_retries_once(monkeypatch, s3):
+    calls = []
+
+    class ExpiredClient:
+        async def get_object(self, **kwargs):
+            calls.append(kwargs)
+            raise _expired_token_error("GetObject")
+
+    async def get_s3(bucket=None):
+        return ExpiredClient()
+
+    monkeypatch.setattr(s3, "get_s3", get_s3)
+
+    with pytest.raises(PermissionError, match="expired"):
+        s3.call_s3("get_object", Bucket=test_bucket_name, Key="test/accounts.1.json")
+    assert len(calls) == 2
+
+
+def test_expired_token_refreshes_once_for_concurrent_calls(monkeypatch, s3):
+    keys = list(files)
+    stale_client = s3.s3
+    failed = []
+    refreshes = []
+    all_in_flight = asyncio.Event()
+
+    async def get_object(**kwargs):
+        # hold every call until all of them are using the stale client
+        failed.append(kwargs["Key"])
+        if len(failed) == len(keys):
+            all_in_flight.set()
+        await all_in_flight.wait()
+        raise _expired_token_error("GetObject")
+
+    monkeypatch.setattr(stale_client, "get_object", get_object)
+    set_session = s3.set_session
+
+    async def counting_set_session(refresh=False, kwargs={}):
+        if refresh:
+            refreshes.append(True)
+        return await set_session(refresh=refresh, kwargs=kwargs)
+
+    monkeypatch.setattr(s3, "set_session", counting_set_session)
+
+    async def read_all():
+        return await asyncio.gather(
+            *(
+                s3._call_s3("get_object", Bucket=test_bucket_name, Key=key)
+                for key in keys
+            )
+        )
+
+    responses = sync(s3.loop, read_all)
+
+    assert len(responses) == len(keys)
+    assert sorted(failed) == sorted(keys)
+    assert len(refreshes) == 1
+
+
+def test_expired_token_keeps_injected_session(monkeypatch, s3):
+    session = aiobotocore.session.AioSession()
+    fs = S3FileSystem(
+        session=session,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        skip_instance_cache=True,
+    )
+    client = fs.connect()
+    calls = []
+
+    async def get_object(**kwargs):
+        calls.append(kwargs)
+        raise _expired_token_error("GetObject")
+
+    monkeypatch.setattr(client, "get_object", get_object)
+
+    with pytest.raises(PermissionError, match="expired"):
+        fs.call_s3("get_object", Bucket=test_bucket_name, Key="test/accounts.1.json")
+    assert len(calls) == 1
+    assert fs.session is session
+    assert fs.s3 is client
 
 
 def test_local_expiry_check(s3):
