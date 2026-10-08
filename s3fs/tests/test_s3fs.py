@@ -2786,6 +2786,62 @@ def test_raise_exception_when_file_has_changed_during_reading(s3, local_check):
             f.read()
 
 
+@pytest.mark.parametrize("code", ["PreconditionFailed", "412"])
+@pytest.mark.parametrize(
+    "error_details",
+    [{}, {"Message": None}, {"Message": ""}, {"Message": "ETag changed"}],
+)
+def test_expired_read_uses_error_code(s3, monkeypatch, code, error_details):
+    path = test_bucket_name + "/expired-read"
+    s3.pipe(path, b"data")
+    error = ClientError(
+        {
+            "Error": {"Code": code, **error_details},
+            "ResponseMetadata": {"HTTPStatusCode": 412},
+        },
+        "GetObject",
+    )
+
+    with s3.open(path, "rb") as stream:
+
+        async def get_object(**kwargs):
+            assert kwargs["IfMatch"] == stream.details["ETag"]
+            raise error
+
+        monkeypatch.setattr(s3.s3, "get_object", get_object)
+        with pytest.raises(FileExpired) as caught:
+            stream.read()
+
+    assert caught.value.__cause__.__cause__ is error
+    assert path in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "error_details, exception",
+    [
+        ({"Code": "InvalidArgument", "Message": "pre-conditions are invalid"}, OSError),
+        ({"Code": "AccessDenied", "Message": None}, PermissionError),
+        ({"Code": "PreconditionFailed", "Condition": "If-None-Match"}, FileExistsError),
+    ],
+)
+def test_expired_read_preserves_other_errors(s3, monkeypatch, error_details, exception):
+    path = test_bucket_name + "/other-error"
+    s3.pipe(path, b"data")
+    error = ClientError({"Error": error_details}, "GetObject")
+
+    with s3.open(path, "rb") as stream:
+
+        async def get_object(**kwargs):
+            raise error
+
+        monkeypatch.setattr(s3.s3, "get_object", get_object)
+        with pytest.raises(exception) as caught:
+            stream.read()
+
+    assert type(caught.value) is exception
+    assert caught.value.__cause__ is error
+
+
 def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     # Set this to a lower value so that we can actually
     # test this without creating giant objects in memory

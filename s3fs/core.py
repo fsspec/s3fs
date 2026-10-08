@@ -2747,7 +2747,13 @@ class S3File(AbstractBufferedFile):
             )
 
         except OSError as ex:
-            if ex.args[0] == errno.EINVAL and "pre-conditions" in ex.args[1]:
+            cause = ex.__cause__
+            if (
+                ex.errno == errno.EINVAL
+                and isinstance(cause, ClientError)
+                and cause.response.get("Error", {}).get("Code")
+                in ("PreconditionFailed", "412")
+            ):
                 raise FileExpired(
                     filename=self.details["name"], e_tag=self.details.get("ETag")
                 ) from ex
