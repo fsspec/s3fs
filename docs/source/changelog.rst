@@ -4,6 +4,7 @@ Changelog
 Unreleased
 ----------
 
+- Recognize expired reads by the S3 error code when the error message is missing or differs (#1053)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
 
