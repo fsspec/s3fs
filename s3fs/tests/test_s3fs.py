@@ -1025,6 +1025,21 @@ def test_s3_glob(s3):
     assert test_bucket_name + "/filexdat" not in s3.glob(test_bucket_name + "/file.*")
 
 
+@pytest.mark.parametrize("warm_cache", [False, True])
+def test_glob_implicit_directories_with_cached_children(s3, warm_cache):
+    base = test_bucket_name + "/glob-implicit"
+    nested = base + "/something/target"
+    direct = base + "/target"
+    s3.pipe_file(nested + "/folder/file.txt", b"nested")
+    s3.pipe_file(direct + "/file.txt", b"direct")
+    if warm_cache:
+        s3.ls(nested)
+
+    expected = [nested, direct]
+    assert s3.glob(base + "/**/target") == expected
+    assert s3.glob(base + "/**/target") == expected
+
+
 def test_get_list_of_summary_objects(s3):
     L = s3.ls(test_bucket_name + "/test")
 
