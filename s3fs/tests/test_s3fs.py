@@ -15,6 +15,7 @@ import pytest
 import moto
 from moto.moto_server.threaded_moto_server import ThreadedMotoServer
 from itertools import chain
+from unittest.mock import AsyncMock, MagicMock
 import fsspec.core
 from dateutil.tz import tzutc
 
@@ -158,7 +159,49 @@ def test_simple(s3):
     with s3.open(a, "rb") as f:
         out = f.read(len(data))
         assert len(data) == len(out)
-        assert out == data
+    assert out == data
+
+
+@pytest.mark.parametrize("existing_session", [False, True])
+def test_get_delegated_s3pars_awaits_sts(monkeypatch, existing_session):
+    session = MagicMock()
+    client = MagicMock()
+    client.get_session_token = AsyncMock(
+        return_value={
+            "Credentials": {
+                "AccessKeyId": "delegated-key",
+                "SecretAccessKey": "delegated-secret",
+                "SessionToken": "delegated-token",
+            }
+        }
+    )
+    context = session.create_client.return_value
+    context.__aenter__ = AsyncMock(return_value=client)
+    context.__aexit__ = AsyncMock(return_value=False)
+    factory = MagicMock(return_value=session)
+    monkeypatch.setattr(s3fs.core.aiobotocore.session, "AioSession", factory)
+    fs = S3FileSystem(
+        key="source-key",
+        secret="source-secret",
+        session=session if existing_session else None,
+        skip_instance_cache=True,
+    )
+
+    assert fs.get_delegated_s3pars(exp=900) == {
+        "key": "delegated-key",
+        "secret": "delegated-secret",
+        "token": "delegated-token",
+        "anon": False,
+    }
+    session.create_client.assert_called_once_with(
+        "sts", aws_access_key_id="source-key", aws_secret_access_key="source-secret"
+    )
+    client.get_session_token.assert_awaited_once_with(DurationSeconds=900)
+    context.__aexit__.assert_awaited_once()
+    if existing_session:
+        factory.assert_not_called()
+    else:
+        factory.assert_called_once_with()
 
 
 def test_with_size(s3):
