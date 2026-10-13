@@ -51,7 +51,7 @@ def test_get_file_forwards_request_options(tmp_path, max_concurrency):
             str(target),
             chunksize=4,
             max_concurrency=max_concurrency,
-            **options
+            **options,
         )
     )
     assert target.read_bytes() == data
@@ -101,3 +101,37 @@ def test_get_file_keeps_request_options_on_retry(tmp_path):
     assert calls[1]["Range"] == "bytes=3-"
     assert all(call["SSECustomerKey"] == "test key" for call in calls)
     assert all(call["RequestPayer"] == "requester" for call in calls)
+
+
+@pytest.mark.parametrize("max_concurrency", [1, 2])
+@pytest.mark.parametrize("option,value", [("Range", "bytes=10-19"), ("PartNumber", 2)])
+@pytest.mark.parametrize("option_source", ["call", "filesystem"])
+def test_get_file_rejects_partial_object_options(
+    tmp_path, max_concurrency, option, value, option_source
+):
+    configured_options = {option: value} if option_source == "filesystem" else {}
+    fs = S3FileSystem(s3_additional_kwargs=configured_options, skip_instance_cache=True)
+    calls = []
+
+    async def call_s3(method, **kwargs):
+        calls.append(kwargs)
+        data = b"0123456789abcdefghij"
+        if "Range" in kwargs:
+            start, end = kwargs["Range"].removeprefix("bytes=").split("-")
+            data = data[int(start) : int(end) + 1 if end else None]
+        return {"Body": Body(data), "ContentLength": len(data)}
+
+    fs._call_s3 = call_s3
+    target = tmp_path / "existing"
+    target.write_bytes(b"keep existing data")
+    options = {option: value} if option_source == "call" else {}
+    with pytest.raises(ValueError, match=option):
+        fs.get_file(
+            "bucket/key",
+            str(target),
+            chunksize=5,
+            max_concurrency=max_concurrency,
+            **options,
+        )
+    assert not calls
+    assert target.read_bytes() == b"keep existing data"

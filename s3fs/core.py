@@ -1648,6 +1648,13 @@ class S3FileSystem(AsyncFileSystem):
         max_concurrency=None,
         **kwargs,
     ):
+        """Download a complete object with non-range GetObject request options."""
+        for option in ("Range", "PartNumber"):
+            if option in kwargs or option in self.s3_additional_kwargs:
+                raise ValueError(
+                    f"{option} is not supported by get_file, which downloads "
+                    "complete objects"
+                )
         if os.path.isdir(lpath):
             return
         bucket, key, vers = self.split_path(rpath)
