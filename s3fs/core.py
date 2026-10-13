@@ -1600,11 +1600,12 @@ class S3FileSystem(AsyncFileSystem):
         callback=_DEFAULT_CALLBACK,
         max_concurrency=None,
         version_id=None,
+        **kwargs,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
 
         async def _download_chunk(start, end):
-            kw = self.req_kw.copy()
+            kw = {**self.req_kw, **kwargs}
             kw["Range"] = f"bytes={start}-{end}"
             resp = await self._call_s3(
                 "get_object",
@@ -1647,12 +1648,19 @@ class S3FileSystem(AsyncFileSystem):
         max_concurrency=None,
         **kwargs,
     ):
+        """Download a complete object with non-range GetObject request options."""
+        for option in ("Range", "PartNumber"):
+            if option in kwargs or option in self.s3_additional_kwargs:
+                raise ValueError(
+                    f"{option} is not supported by get_file, which downloads "
+                    "complete objects"
+                )
         if os.path.isdir(lpath):
             return
         bucket, key, vers = self.split_path(rpath)
 
         async def _open_file(range: int):
-            kw = self.req_kw.copy()
+            kw = {**self.req_kw, **kwargs}
             if range:
                 kw["Range"] = f"bytes={range}-"
             resp = await self._call_s3(
@@ -1684,6 +1692,7 @@ class S3FileSystem(AsyncFileSystem):
                 callback=callback,
                 max_concurrency=max_concurrency,
                 version_id=version_id or vers,
+                **kwargs,
             )
 
         # Sequential download for small files or concurrency=1
