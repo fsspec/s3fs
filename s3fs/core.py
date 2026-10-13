@@ -1917,7 +1917,7 @@ class S3FileSystem(AsyncFileSystem):
                 Bucket=bucket,
                 Prefix=key,
             )
-            versions.extend(out["Versions"])
+            versions.extend(out.get("Versions", []))
             kwargs.update(
                 {
                     "VersionIdMarker": out.get("NextVersionIdMarker", ""),
