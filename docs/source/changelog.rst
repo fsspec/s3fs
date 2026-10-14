@@ -6,6 +6,7 @@ Unreleased
 
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
+- Rebuild an s3fs-owned session and retry once when temporary credentials expire (#632)
 
 2026.9.0
 --------
