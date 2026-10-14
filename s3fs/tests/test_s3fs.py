@@ -186,6 +186,8 @@ def test_get_delegated_s3pars_awaits_sts(monkeypatch, existing_session):
         session=session if existing_session else None,
         skip_instance_cache=True,
     )
+    set_session = AsyncMock(wraps=fs.set_session)
+    monkeypatch.setattr(fs, "set_session", set_session)
 
     assert fs.get_delegated_s3pars(exp=900) == {
         "key": "delegated-key",
@@ -193,7 +195,12 @@ def test_get_delegated_s3pars_awaits_sts(monkeypatch, existing_session):
         "token": "delegated-token",
         "anon": False,
     }
-    session.create_client.assert_called_once_with(
+    set_session.assert_awaited_once_with()
+    assert fs.session is session
+    assert fs._s3 is client
+    assert session.create_client.call_count == 2
+    assert session.create_client.call_args_list[0].args == ("s3",)
+    session.create_client.assert_any_call(
         "sts", aws_access_key_id="source-key", aws_secret_access_key="source-secret"
     )
     client.get_session_token.assert_awaited_once_with(DurationSeconds=900)

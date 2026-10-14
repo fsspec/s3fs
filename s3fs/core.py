@@ -747,8 +747,8 @@ class S3FileSystem(AsyncFileSystem):
             }
         if self.key is None or self.secret is None:  # automatic credentials
             return {"anon": False}
-        session = self.session or aiobotocore.session.AioSession(**self.kwargs)
-        async with session.create_client(
+        await self.set_session()
+        async with self.session.create_client(
             "sts", aws_access_key_id=self.key, aws_secret_access_key=self.secret
         ) as sts:
             cred = (await sts.get_session_token(DurationSeconds=exp))["Credentials"]
