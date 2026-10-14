@@ -1077,7 +1077,7 @@ class S3FileSystem(AsyncFileSystem):
                     # exclude placeholdees, they do not belong in the directory listing
                     thisdircache[par].append(o)
                 par, name, o = par.rsplit("/", maxsplit=1)[0], par, d
-                if par in thisdircache or par in self.dircache:
+                if par in thisdircache:
                     break
 
         # Explicitly add directories to their parents in the dircache
