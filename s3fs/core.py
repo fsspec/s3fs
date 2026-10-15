@@ -1326,6 +1326,13 @@ class S3FileSystem(AsyncFileSystem):
         else:
             head = {}
 
+        chunksize = chunksize or self.default_block_size
+        concurrent = (
+            start is None
+            and end is None
+            and (max_concurrency or self.max_concurrency) > 1
+        )
+
         async def _call_and_read():
             resp = await self._call_s3(
                 "get_object",
@@ -1335,29 +1342,27 @@ class S3FileSystem(AsyncFileSystem):
                 **head,
             )
             try:
-                return await resp["Body"].read()
+                # size comes from this response, as in _get_file, so no HEAD is needed
+                content_length = resp.get("ContentLength")
+                if concurrent and content_length and content_length > chunksize:
+                    return None, content_length
+                return await resp["Body"].read(), None
             finally:
                 resp["Body"].close()
 
-        if (
-            start is None
-            and end is None
-            and (max_concurrency or self.max_concurrency) > 1
-        ):
-            chunksize = chunksize or self.default_block_size
-            content_length = await self._size(path)
-
-            if content_length and content_length > chunksize:
-                return await self._cat_file_concurrent(
-                    bucket,
-                    key,
-                    content_length,
-                    chunksize,
-                    max_concurrency=max_concurrency,
-                    version_id=version_id or vers,
-                )
-
-        return await _error_wrapper(_call_and_read, retries=self.retries)
+        data, content_length = await _error_wrapper(
+            _call_and_read, retries=self.retries
+        )
+        if data is None:
+            return await self._cat_file_concurrent(
+                bucket,
+                key,
+                content_length,
+                chunksize,
+                max_concurrency=max_concurrency,
+                version_id=version_id or vers,
+            )
+        return data
 
     async def _cat_file_concurrent(
         self,
