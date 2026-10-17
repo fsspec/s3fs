@@ -3715,7 +3715,9 @@ def test_find_with_prefix_preserves_existing_full_cache(s3):
 
     assert len(s3.ls(data_dir)) == 2
 
-    s3.find(data_dir, prefix="train-", maxdepth=1)
+    assert s3.find(data_dir, prefix="train-", maxdepth=1) == [
+        data_dir + "/train-00000.parquet"
+    ]
 
     cached = {f.split("/")[-1] for f in s3.ls(data_dir)}
     assert cached == {"train-00000.parquet", "test-00000.parquet"}

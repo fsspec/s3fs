@@ -869,7 +869,7 @@ class S3FileSystem(AsyncFileSystem):
             prefix = ""
         if key:
             prefix = key.lstrip("/") + "/" + prefix
-        if path not in self.dircache or refresh or not delimiter or versions:
+        if path not in self.dircache or refresh or not delimiter or versions or partial:
             try:
                 logger.debug("Get directory listing page for %s" % path)
                 dirs = []
