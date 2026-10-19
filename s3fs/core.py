@@ -2328,7 +2328,7 @@ class S3FileSystem(AsyncFileSystem):
         _, _, parts_suffix = info.get("ETag", "").strip('"').partition("-")
         if preserve_etag and parts_suffix:
             await self._copy_etag_preserved(
-                path1, path2, size, total_parts=int(parts_suffix)
+                path1, path2, size, total_parts=int(parts_suffix), **kwargs
             )
         elif size <= MANAGED_COPY_THRESHOLD:
             # simple copy allowed for <5GB

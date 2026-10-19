@@ -2833,6 +2833,39 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     s3.rm(test_file1)
 
 
+@pytest.mark.parametrize("preserve_etag", [False, True])
+@pytest.mark.parametrize("managed_copy", [False, True])
+def test_copy_multipart_object_options(s3, monkeypatch, preserve_etag, managed_copy):
+    if managed_copy:
+        monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
+    source = test_bucket_name + "/multipart-source"
+    target = test_bucket_name + "/multipart-target"
+    data = b"a" * (10 * 2**20)
+    s3.pipe_file(source, data, chunksize=5 * 2**20)
+    source_etag = s3.info(source)["ETag"]
+    assert "-" in source_etag
+
+    s3.cp_file(
+        source,
+        target,
+        preserve_etag=preserve_etag,
+        Metadata={"purpose": "copy-regression"},
+        MetadataDirective="REPLACE",
+        ContentType="application/x-s3fs-test",
+        ServerSideEncryption="AES256",
+    )
+
+    result = get_boto3_client().head_object(
+        Bucket=test_bucket_name, Key="multipart-target"
+    )
+    assert result["Metadata"] == {"purpose": "copy-regression"}
+    assert result["ContentType"] == "application/x-s3fs-test"
+    assert result["ServerSideEncryption"] == "AES256"
+    assert s3.cat_file(target) == data
+    if preserve_etag:
+        assert result["ETag"] == source_etag
+
+
 def test_sync_from_wihin_async(s3):
     # if treating as sync but within an even loop, e.g., calling from jupyter;
     # IO happens on dedicated thread.
