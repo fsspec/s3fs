@@ -869,7 +869,7 @@ class S3FileSystem(AsyncFileSystem):
             prefix = ""
         if key:
             prefix = key.lstrip("/") + "/" + prefix
-        if path not in self.dircache or refresh or not delimiter or versions:
+        if path not in self.dircache or refresh or not delimiter or versions or partial:
             try:
                 logger.debug("Get directory listing page for %s" % path)
                 dirs = []
@@ -1322,6 +1322,13 @@ class S3FileSystem(AsyncFileSystem):
     ):
         bucket, key, vers = self.split_path(path)
         if start is not None or end is not None:
+            if end == 0 or (
+                start is not None
+                and end is not None
+                and start >= end
+                and (start < 0) == (end < 0)
+            ):
+                return b""
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
