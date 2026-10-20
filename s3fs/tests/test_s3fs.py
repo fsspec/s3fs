@@ -1325,7 +1325,10 @@ def test_pipe_cat_big(s3, size):
     assert s3.cat(test_bucket_name + "/bigfile") == data
 
 
-@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (6, 6), (-1, -1)])
+@pytest.mark.parametrize(
+    "start,end",
+    [(None, 0), (0, 0), (1, 1), (6, 6), (-1, -1), (3, 1), (1, 0), (-1, 0), (-1, -3)],
+)
 def test_cat_file_empty_range(s3, monkeypatch, start, end):
     path = test_bucket_name + "/empty-range"
     s3.pipe_file(path, b"abcdef")
@@ -2536,6 +2539,8 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, end=5) == data[:5]
     assert s3.cat_file(fn, start=1, end=-1) == data[1:-1]
     assert s3.cat_file(fn, start=-5) == data[-5:]
+    assert s3.cat_file(fn, start=-5, end=-1) == data[-5:-1]
+    assert s3.cat_file(fn, start=-5, end=len(data) - 1) == data[-5:-1]
 
 
 def test_async_s3_old(s3):
