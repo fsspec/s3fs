@@ -2684,10 +2684,15 @@ def test_with_xzarr(s3):
     nana.to_dataset().to_zarr(store=s3store, mode="w", consolidated=True, compute=True)
 
 
-def test_async_close():
+def test_async_close(s3):
     async def _():
         loop = asyncio.get_event_loop()
-        s3 = S3FileSystem(anon=False, asynchronous=True, loop=loop)
+        s3 = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            loop=loop,
+            client_kwargs={"endpoint_url": endpoint_uri},
+        )
         await s3._connect()
 
         fn = test_bucket_name + "/afile"
