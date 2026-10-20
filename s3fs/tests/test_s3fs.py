@@ -1325,6 +1325,22 @@ def test_pipe_cat_big(s3, size):
     assert s3.cat(test_bucket_name + "/bigfile") == data
 
 
+@pytest.mark.parametrize("start,end", [(None, 0), (0, 0), (1, 1), (6, 6), (-1, -1)])
+def test_cat_file_empty_range(s3, monkeypatch, start, end):
+    path = test_bucket_name + "/empty-range"
+    s3.pipe_file(path, b"abcdef")
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def recording_call_s3(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", recording_call_s3)
+    assert s3.cat_file(path, start=start, end=end) == b""
+    assert calls == []
+
+
 @pytest.mark.parametrize("factor", [1, 5, 6])
 def test_cat_file_parallel(s3, factor):
     chunksize = 5 * 2**20

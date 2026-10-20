@@ -4,6 +4,8 @@ Changelog
 Unreleased
 ----------
 
+- Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
+
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
 

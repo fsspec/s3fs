@@ -1322,6 +1322,8 @@ class S3FileSystem(AsyncFileSystem):
     ):
         bucket, key, vers = self.split_path(path)
         if start is not None or end is not None:
+            if start == end or (start is None and end == 0):
+                return b""
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
