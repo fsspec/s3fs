@@ -588,6 +588,51 @@ def test_exists_versioned(s3, version_aware):
         assert s3.exists("/".join(segments[:i]))
 
 
+@pytest.mark.parametrize("operation", ["info", "open"])
+@pytest.mark.parametrize("version_in_path", [False, True])
+@pytest.mark.parametrize("has_children", [False, True])
+def test_missing_version(s3, monkeypatch, operation, version_in_path, has_children):
+    s3 = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/missing-version"
+    s3.pipe_file(path, b"object-data")
+    valid_version = s3.info(path)["VersionId"]
+    if has_children:
+        s3.pipe_file(path + "/child", b"child-data")
+    s3.invalidate_cache()
+
+    missing_version = "00000000-0000-0000-0000-000000000000"
+    if version_in_path:
+        target = f"{path}?versionId={missing_version}"
+        kwargs = {}
+    else:
+        target = path
+        kwargs = {"version_id": missing_version}
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def record_call(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", record_call)
+    with pytest.raises(FileNotFoundError) as exc:
+        if operation == "info":
+            s3.info(target, **kwargs)
+        else:
+            with s3.open(target, "rb", **kwargs) as f:
+                f.read()
+    assert path in str(exc.value)
+    assert missing_version in str(exc.value)
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
+    assert calls == ["head_object"]
+
+    # A failed version lookup must not affect a version that does exist.
+    with s3.open(path, "rb", version_id=valid_version) as f:
+        assert f.read() == b"object-data"
+    if has_children:
+        assert s3.isdir(path)
+
+
 def test_isfile(s3):
     assert not s3.isfile("")
     assert not s3.isfile("/")

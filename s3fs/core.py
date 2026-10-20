@@ -1789,7 +1789,13 @@ class S3FileSystem(AsyncFileSystem):
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
-            except FileNotFoundError:
+            except FileNotFoundError as e:
+                if version_id is not None:
+                    # Directories have no versions, so a listing cannot satisfy
+                    # this request or replace the failed object lookup.
+                    raise FileNotFoundError(
+                        f"{fullpath} (version_id={version_id})"
+                    ) from e
                 pass
             except PermissionError as e:
                 if version_id is not None:
