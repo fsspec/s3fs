@@ -4,6 +4,8 @@ Changelog
 Unreleased
 ----------
 
+- Forward per-call S3 request options through single-object and batched deletes.
+
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
 
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)

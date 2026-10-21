@@ -2416,7 +2416,7 @@ class S3FileSystem(AsyncFileSystem):
         self.invalidate_cache(path)
 
         try:
-            await self._call_s3("delete_object", Bucket=bucket, Key=key)
+            await self._call_s3("delete_object", kwargs, Bucket=bucket, Key=key)
         except ClientError as e:
             raise translate_boto_error(e)
 
@@ -2432,7 +2432,7 @@ class S3FileSystem(AsyncFileSystem):
         # TODO: fails if more than one bucket in list
         out = await _run_coros_in_chunks(
             [
-                self._bulk_delete(files[i : i + 1000])
+                self._bulk_delete(files[i : i + 1000], **kwargs)
                 for i in range(0, len(files), 1000)
             ],
             batch_size=3,
