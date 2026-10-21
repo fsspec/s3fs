@@ -2840,7 +2840,15 @@ class S3File(AbstractBufferedFile):
             if self.buffer is not None:
                 logger.debug("Empty file committed %s" % self)
                 self._abort_mpu()
-                write_result = self.fs.touch(self.path, **self.kwargs)
+                if self.fs.split_path(self.path)[2]:
+                    raise ValueError(
+                        "S3 does not support touching existing versions of files"
+                    )
+                kw = dict(Key=self.key, Bucket=self.bucket, Body=b"", **self.kwargs)
+                if self.acl:
+                    kw["ACL"] = self.acl
+                write_result = self._call_s3("put_object", **kw, **match)
+                self.fs.invalidate_cache(self.fs._parent(self.path))
         elif not self.parts:
             if self.buffer is not None:
                 logger.debug("One-shot upload of %s" % self)
