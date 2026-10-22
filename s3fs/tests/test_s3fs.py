@@ -821,6 +821,76 @@ def test_bulk_delete(s3):
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
 
 
+@pytest.mark.parametrize("method", ["rm_file", "rm"])
+@pytest.mark.parametrize("override", [False, True])
+def test_delete_request_options(s3, monkeypatch, method, override):
+    defaults = {"ExpectedBucketOwner": "123456789012"}
+    fs = S3FileSystem(
+        client_kwargs={"endpoint_url": endpoint_uri},
+        s3_additional_kwargs=defaults,
+        requester_pays=True,
+    )
+    calls = []
+
+    async def delete_object(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(fs.s3), "delete_object", delete_object)
+    monkeypatch.setattr(type(fs.s3), "delete_objects", delete_objects)
+    options = (
+        {
+            "ExpectedBucketOwner": "999999999999",
+            "RequestPayer": None,
+            "MFA": "serial 123456",
+        }
+        if override
+        else {}
+    )
+    original_options = options.copy()
+    path = f"{test_bucket_name}/nested/file1"
+    getattr(fs, method)(path, **options)
+
+    assert len(calls) == 1
+    assert calls[0]["Bucket"] == test_bucket_name
+    assert calls[0]["ExpectedBucketOwner"] == (
+        "999999999999" if override else "123456789012"
+    )
+    if override:
+        assert "RequestPayer" not in calls[0]
+        assert calls[0]["MFA"] == "serial 123456"
+    else:
+        assert calls[0]["RequestPayer"] == "requester"
+    assert options == original_options
+    assert (
+        defaults == fs.s3_additional_kwargs == {"ExpectedBucketOwner": "123456789012"}
+    )
+
+
+def test_rm_request_options_reach_every_batch(s3, monkeypatch):
+    parent = f"{test_bucket_name}/batches"
+    paths = [f"{parent}/{i:04}" for i in range(1001)]
+    s3.dircache[parent] = [{"name": path, "type": "file", "size": 0} for path in paths]
+    calls = []
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    s3.rm(paths, ExpectedBucketOwner="123456789012", MFA="serial 123456")
+
+    assert sorted(len(call["Delete"]["Objects"]) for call in calls) == [1, 1000]
+    for call in calls:
+        assert call["ExpectedBucketOwner"] == "123456789012"
+        assert call["MFA"] == "serial 123456"
+    assert parent not in s3.dircache
+
+
 @pytest.mark.parametrize("asynchronous", [False, True])
 @pytest.mark.parametrize("partial", [False, True])
 def test_rm_partial_delete_errors(s3, asynchronous, partial):
