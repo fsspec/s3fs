@@ -2418,11 +2418,23 @@ class S3FileSystem(AsyncFileSystem):
         return [f"{bucket}/{_['Key']}" for _ in out.get("Deleted", [])]
 
     async def _rm_file(self, path, **kwargs):
-        bucket, key, _ = self.split_path(path)
+        """Remove a single file
+
+        On a versioned bucket, a path without a version only adds a delete
+        marker, so earlier versions remain. A path with a version, such as
+        ``bucket/key?versionId=...``, permanently deletes that version.
+        """
+        bucket, key, version_id = self.split_path(path)
         self.invalidate_cache(path)
 
         try:
-            await self._call_s3("delete_object", kwargs, Bucket=bucket, Key=key)
+            await self._call_s3(
+                "delete_object",
+                kwargs,
+                Bucket=bucket,
+                Key=key,
+                **version_id_kw(version_id),
+            )
         except ClientError as e:
             raise translate_boto_error(e)
 
