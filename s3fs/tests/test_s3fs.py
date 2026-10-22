@@ -3199,6 +3199,25 @@ def test_rm_file(s3):
     assert not s3.exists(test_bucket_name + "/to_be_removed")
 
 
+def test_rm_file_version(s3):
+    versioned_file = versioned_bucket_name + "/versioned_file"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    with s3.open(versioned_file, "wb") as fo:
+        fo.write(b"1")
+    first_version = fo.version_id
+    with s3.open(versioned_file, "wb") as fo:
+        fo.write(b"2")
+    second_version = fo.version_id
+
+    s3.rm_file(f"{versioned_file}?versionId={first_version}")
+
+    assert s3.cat(versioned_file) == b"2"
+    versions = s3.object_version_info(versioned_file)
+    assert [version["VersionId"] for version in versions] == [second_version]
+
+
 def test_exists_isdir(s3):
     bad_path = "s3://nyc-tlc-asdfasdf/trip data/"
     assert not s3.exists(bad_path)
