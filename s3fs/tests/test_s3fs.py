@@ -3502,6 +3502,100 @@ old_moto = version.parse(moto.__version__) < version.parse("5.1.11")
 
 
 @pytest.mark.xfail(
+    old_botocore, reason="botocore<1.36.0 lacks IfNoneMatch support", strict=True
+)
+@pytest.mark.parametrize("contents", [b"", b"existing data"])
+def test_empty_exclusive_write_preserves_existing_object(s3, contents):
+    path = f"{test_bucket_name}/empty-exclusive"
+    s3.pipe_file(path, contents)
+    with pytest.raises(FileExistsError):
+        with s3.open(path, "xb"):
+            pass
+    assert s3.cat_file(path) == contents
+    assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+@pytest.mark.parametrize("mode", ["wb", "xb"])
+def test_empty_buffered_write_creates_object(s3, mode):
+    path = f"{test_bucket_name}/empty-created"
+    with s3.open(path, mode):
+        pass
+    assert s3.cat_file(path) == b""
+
+
+def test_empty_buffered_commit_invalidates_cached_metadata(s3):
+    path = f"{test_bucket_name}/empty-overwrite"
+    s3.pipe_file(path, b"existing data")
+    f = s3.open(path, "wb", autocommit=False)
+    f.close()
+    s3.ls(test_bucket_name)
+    assert s3.info(path)["size"] == len(b"existing data")
+    f.commit()
+    assert s3.info(path)["size"] == 0
+    assert s3.cat_file(path) == b""
+    assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+@pytest.mark.parametrize("autocommit", [True, False])
+def test_empty_buffered_write_rejects_versioned_path(s3, autocommit):
+    fs = S3FileSystem(
+        version_aware=True,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    client = get_boto3_client()
+    key = "versioned-empty-write"
+    original = client.put_object(
+        Bucket=versioned_bucket_name, Key=key, Body=b"original"
+    )["VersionId"]
+    latest = client.put_object(Bucket=versioned_bucket_name, Key=key, Body=b"latest")[
+        "VersionId"
+    ]
+    path = f"{versioned_bucket_name}/{key}"
+    with pytest.raises(ValueError, match="touching existing versions"):
+        f = fs.open(f"{path}?versionId={original}", "wb", autocommit=autocommit)
+        f.close()
+        if not autocommit:
+            f.commit()
+    assert fs.cat_file(f"{path}?versionId={original}") == b"original"
+    assert fs.cat_file(path) == b"latest"
+    versions = client.list_object_versions(Bucket=versioned_bucket_name, Prefix=key)
+    assert {item["VersionId"] for item in versions["Versions"]} == {original, latest}
+    assert not fs.list_multipart_uploads(versioned_bucket_name)
+
+
+@pytest.mark.parametrize("contents", [b"", b"x"])
+@pytest.mark.parametrize("version_aware", [False, True])
+def test_buffered_write_preserves_file_options(s3, contents, version_aware):
+    fs = S3FileSystem(
+        version_aware=version_aware,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    bucket = versioned_bucket_name if version_aware else test_bucket_name
+    key = "file-options"
+    with fs.open(
+        f"{bucket}/{key}",
+        "wb",
+        acl="public-read",
+        Metadata={"unit": "mm"},
+        ContentType="application/octet-stream",
+    ) as f:
+        f.write(contents)
+    client = get_boto3_client()
+    info = client.head_object(Bucket=bucket, Key=key)
+    assert info["Metadata"] == {"unit": "mm"}
+    assert info["ContentType"] == "application/octet-stream"
+    assert info["ContentLength"] == len(contents)
+    assert any(
+        grant["Permission"] == "READ"
+        and grant["Grantee"].get("URI")
+        == "http://acs.amazonaws.com/groups/global/AllUsers"
+        for grant in client.get_object_acl(Bucket=bucket, Key=key)["Grants"]
+    )
+    if version_aware:
+        assert f.version_id == info["VersionId"]
+
+
+@pytest.mark.xfail(
     old_moto,
     reason="moto<5.1.11 doesn't support IfNoneMatch for MPU when object created via MPU",
     strict=True,
