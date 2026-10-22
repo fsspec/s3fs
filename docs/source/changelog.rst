@@ -5,9 +5,11 @@ Unreleased
 ----------
 
 - Preserve exclusive-create conditions and file options when committing empty files.
+- Forward per-call S3 request options through single-object and batched deletes.
 
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
 
+- Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
 

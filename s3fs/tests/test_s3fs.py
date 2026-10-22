@@ -588,6 +588,51 @@ def test_exists_versioned(s3, version_aware):
         assert s3.exists("/".join(segments[:i]))
 
 
+@pytest.mark.parametrize("operation", ["info", "open"])
+@pytest.mark.parametrize("version_in_path", [False, True])
+@pytest.mark.parametrize("has_children", [False, True])
+def test_missing_version(s3, monkeypatch, operation, version_in_path, has_children):
+    s3 = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/missing-version"
+    s3.pipe_file(path, b"object-data")
+    valid_version = s3.info(path)["VersionId"]
+    if has_children:
+        s3.pipe_file(path + "/child", b"child-data")
+    s3.invalidate_cache()
+
+    missing_version = "00000000-0000-0000-0000-000000000000"
+    if version_in_path:
+        target = f"{path}?versionId={missing_version}"
+        kwargs = {}
+    else:
+        target = path
+        kwargs = {"version_id": missing_version}
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def record_call(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", record_call)
+    with pytest.raises(FileNotFoundError) as exc:
+        if operation == "info":
+            s3.info(target, **kwargs)
+        else:
+            with s3.open(target, "rb", **kwargs) as f:
+                f.read()
+    assert path in str(exc.value)
+    assert missing_version in str(exc.value)
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
+    assert calls == ["head_object"]
+
+    # A failed version lookup must not affect a version that does exist.
+    with s3.open(path, "rb", version_id=valid_version) as f:
+        assert f.read() == b"object-data"
+    if has_children:
+        assert s3.isdir(path)
+
+
 def test_isfile(s3):
     assert not s3.isfile("")
     assert not s3.isfile("/")
@@ -774,6 +819,76 @@ def test_bulk_delete(s3):
     filelist = s3.find(test_bucket_name + "/nested")
     s3.rm(filelist)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
+
+
+@pytest.mark.parametrize("method", ["rm_file", "rm"])
+@pytest.mark.parametrize("override", [False, True])
+def test_delete_request_options(s3, monkeypatch, method, override):
+    defaults = {"ExpectedBucketOwner": "123456789012"}
+    fs = S3FileSystem(
+        client_kwargs={"endpoint_url": endpoint_uri},
+        s3_additional_kwargs=defaults,
+        requester_pays=True,
+    )
+    calls = []
+
+    async def delete_object(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(fs.s3), "delete_object", delete_object)
+    monkeypatch.setattr(type(fs.s3), "delete_objects", delete_objects)
+    options = (
+        {
+            "ExpectedBucketOwner": "999999999999",
+            "RequestPayer": None,
+            "MFA": "serial 123456",
+        }
+        if override
+        else {}
+    )
+    original_options = options.copy()
+    path = f"{test_bucket_name}/nested/file1"
+    getattr(fs, method)(path, **options)
+
+    assert len(calls) == 1
+    assert calls[0]["Bucket"] == test_bucket_name
+    assert calls[0]["ExpectedBucketOwner"] == (
+        "999999999999" if override else "123456789012"
+    )
+    if override:
+        assert "RequestPayer" not in calls[0]
+        assert calls[0]["MFA"] == "serial 123456"
+    else:
+        assert calls[0]["RequestPayer"] == "requester"
+    assert options == original_options
+    assert (
+        defaults == fs.s3_additional_kwargs == {"ExpectedBucketOwner": "123456789012"}
+    )
+
+
+def test_rm_request_options_reach_every_batch(s3, monkeypatch):
+    parent = f"{test_bucket_name}/batches"
+    paths = [f"{parent}/{i:04}" for i in range(1001)]
+    s3.dircache[parent] = [{"name": path, "type": "file", "size": 0} for path in paths]
+    calls = []
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    s3.rm(paths, ExpectedBucketOwner="123456789012", MFA="serial 123456")
+
+    assert sorted(len(call["Delete"]["Objects"]) for call in calls) == [1, 1000]
+    for call in calls:
+        assert call["ExpectedBucketOwner"] == "123456789012"
+        assert call["MFA"] == "serial 123456"
+    assert parent not in s3.dircache
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -2639,10 +2754,15 @@ def test_with_xzarr(s3):
     nana.to_dataset().to_zarr(store=s3store, mode="w", consolidated=True, compute=True)
 
 
-def test_async_close():
+def test_async_close(s3):
     async def _():
         loop = asyncio.get_event_loop()
-        s3 = S3FileSystem(anon=False, asynchronous=True, loop=loop)
+        s3 = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            loop=loop,
+            client_kwargs={"endpoint_url": endpoint_uri},
+        )
         await s3._connect()
 
         fn = test_bucket_name + "/afile"
