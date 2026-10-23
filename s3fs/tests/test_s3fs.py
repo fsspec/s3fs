@@ -2101,6 +2101,23 @@ def test_versions(s3, prefix):
     assert s3.info(versioned_file_v2)
 
 
+def test_object_version_info_ignores_prefixed_keys(s3):
+    versioned_file = versioned_bucket_name + "/versioned_file"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    s3.pipe(versioned_file, b"1")
+    s3.pipe(versioned_file, b"2")
+    s3.pipe(versioned_file + ".bak", b"backup")
+    s3.pipe(versioned_file + "/nested", b"nested")
+
+    versions = s3.object_version_info(versioned_file)
+    assert len(versions) == 2
+    assert {version["Key"] for version in versions} == {"versioned_file"}
+    versions = s3.object_version_info(versioned_file + "/")
+    assert {version["Key"] for version in versions} == {"versioned_file/nested"}
+
+
 def test_list_versions_many(s3):
     # moto doesn't actually behave in the same way that s3 does here so this doesn't test
     # anything really in moto 1.2

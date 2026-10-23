@@ -1929,6 +1929,8 @@ class S3FileSystem(AsyncFileSystem):
                 "non-version aware filesystems"
             )
         bucket, key, _ = self.split_path(path)
+        # Prefix also matches sibling keys such as "key.bak", so filter to the key
+        exact = key and not key.endswith("/")
         kwargs = {}
         out = {"IsTruncated": True}
         versions = []
@@ -1939,7 +1941,9 @@ class S3FileSystem(AsyncFileSystem):
                 Bucket=bucket,
                 Prefix=key,
             )
-            versions.extend(out.get("Versions", []))
+            versions.extend(
+                v for v in out.get("Versions", []) if not exact or v["Key"] == key
+            )
             kwargs.update(
                 {
                     "VersionIdMarker": out.get("NextVersionIdMarker", ""),
