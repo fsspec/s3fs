@@ -7,6 +7,7 @@ Unreleased
 - Preserve exclusive-create conditions and file options when committing empty files.
 - Forward per-call S3 request options through single-object and batched deletes.
 - Delete the requested object version in ``rm_file`` when the path includes one.
+- Only return versions of the requested key from ``object_version_info``, not of other keys sharing it as a prefix.
 
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
 
