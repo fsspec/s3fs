@@ -736,6 +736,13 @@ def test_rmdir(s3):
         s3.rmdir(test_bucket_name)
 
 
+@pytest.mark.parametrize("path", ["s3://test1_bucket", "test1_bucket/"])
+def test_rmdir_bucket_url(s3, path):
+    s3.mkdir("test1_bucket")
+    s3.rmdir(path)
+    assert "test1_bucket" not in s3.ls("/")
+
+
 def test_mkdir(s3):
     bucket = "test1_bucket"
     s3.mkdir(bucket)
@@ -1844,13 +1851,14 @@ def test_writable(s3):
         assert not f.writable()
 
 
-def test_merge(s3):
+@pytest.mark.parametrize("prefix", ["", "s3://"])
+def test_merge(s3, prefix):
     with s3.open(a, "wb") as f:
         f.write(b"a" * 10 * 2**20)
 
     with s3.open(b, "wb") as f:
         f.write(b"a" * 10 * 2**20)
-    s3.merge(test_bucket_name + "/joined", [a, b])
+    s3.merge(prefix + test_bucket_name + "/joined", [prefix + a, prefix + b])
     assert s3.info(test_bucket_name + "/joined")["size"] == 2 * 10 * 2**20
 
 
