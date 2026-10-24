@@ -869,7 +869,7 @@ class S3FileSystem(AsyncFileSystem):
             prefix = ""
         if key:
             prefix = key.lstrip("/") + "/" + prefix
-        if path not in self.dircache or refresh or not delimiter or versions:
+        if path not in self.dircache or refresh or not delimiter or versions or partial:
             try:
                 logger.debug("Get directory listing page for %s" % path)
                 dirs = []
@@ -1077,7 +1077,7 @@ class S3FileSystem(AsyncFileSystem):
                     # exclude placeholdees, they do not belong in the directory listing
                     thisdircache[par].append(o)
                 par, name, o = par.rsplit("/", maxsplit=1)[0], par, d
-                if par in thisdircache or par in self.dircache:
+                if par in thisdircache:
                     break
 
         # Explicitly add directories to their parents in the dircache
@@ -1322,6 +1322,13 @@ class S3FileSystem(AsyncFileSystem):
     ):
         bucket, key, vers = self.split_path(path)
         if start is not None or end is not None:
+            if end == 0 or (
+                start is not None
+                and end is not None
+                and start >= end
+                and (start < 0) == (end < 0)
+            ):
+                return b""
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
@@ -1600,11 +1607,12 @@ class S3FileSystem(AsyncFileSystem):
         callback=_DEFAULT_CALLBACK,
         max_concurrency=None,
         version_id=None,
+        **kwargs,
     ):
         max_concurrency = max_concurrency or self.max_concurrency
 
         async def _download_chunk(start, end):
-            kw = self.req_kw.copy()
+            kw = {**self.req_kw, **kwargs}
             kw["Range"] = f"bytes={start}-{end}"
             resp = await self._call_s3(
                 "get_object",
@@ -1647,12 +1655,19 @@ class S3FileSystem(AsyncFileSystem):
         max_concurrency=None,
         **kwargs,
     ):
+        """Download a complete object with non-range GetObject request options."""
+        for option in ("Range", "PartNumber"):
+            if option in kwargs or option in self.s3_additional_kwargs:
+                raise ValueError(
+                    f"{option} is not supported by get_file, which downloads "
+                    "complete objects"
+                )
         if os.path.isdir(lpath):
             return
         bucket, key, vers = self.split_path(rpath)
 
         async def _open_file(range: int):
-            kw = self.req_kw.copy()
+            kw = {**self.req_kw, **kwargs}
             if range:
                 kw["Range"] = f"bytes={range}-"
             resp = await self._call_s3(
@@ -1684,6 +1699,7 @@ class S3FileSystem(AsyncFileSystem):
                 callback=callback,
                 max_concurrency=max_concurrency,
                 version_id=version_id or vers,
+                **kwargs,
             )
 
         # Sequential download for small files or concurrency=1
@@ -1780,7 +1796,13 @@ class S3FileSystem(AsyncFileSystem):
                     "VersionId": out.get("VersionId"),
                     "ContentType": out.get("ContentType"),
                 }
-            except FileNotFoundError:
+            except FileNotFoundError as e:
+                if version_id is not None:
+                    # Directories have no versions, so a listing cannot satisfy
+                    # this request or replace the failed object lookup.
+                    raise FileNotFoundError(
+                        f"{fullpath} (version_id={version_id})"
+                    ) from e
                 pass
             except PermissionError as e:
                 if version_id is not None:
@@ -1907,6 +1929,8 @@ class S3FileSystem(AsyncFileSystem):
                 "non-version aware filesystems"
             )
         bucket, key, _ = self.split_path(path)
+        # Prefix also matches sibling keys such as "key.bak", so filter to the key
+        exact = key and not key.endswith("/")
         kwargs = {}
         out = {"IsTruncated": True}
         versions = []
@@ -1917,7 +1941,9 @@ class S3FileSystem(AsyncFileSystem):
                 Bucket=bucket,
                 Prefix=key,
             )
-            versions.extend(out["Versions"])
+            versions.extend(
+                v for v in out.get("Versions", []) if not exact or v["Key"] == key
+            )
             kwargs.update(
                 {
                     "VersionIdMarker": out.get("NextVersionIdMarker", ""),
@@ -2319,7 +2345,7 @@ class S3FileSystem(AsyncFileSystem):
         _, _, parts_suffix = info.get("ETag", "").strip('"').partition("-")
         if preserve_etag and parts_suffix:
             await self._copy_etag_preserved(
-                path1, path2, size, total_parts=int(parts_suffix)
+                path1, path2, size, total_parts=int(parts_suffix), **kwargs
             )
         elif size <= MANAGED_COPY_THRESHOLD:
             # simple copy allowed for <5GB
@@ -2396,11 +2422,23 @@ class S3FileSystem(AsyncFileSystem):
         return [f"{bucket}/{_['Key']}" for _ in out.get("Deleted", [])]
 
     async def _rm_file(self, path, **kwargs):
-        bucket, key, _ = self.split_path(path)
+        """Remove a single file
+
+        On a versioned bucket, a path without a version only adds a delete
+        marker, so earlier versions remain. A path with a version, such as
+        ``bucket/key?versionId=...``, permanently deletes that version.
+        """
+        bucket, key, version_id = self.split_path(path)
         self.invalidate_cache(path)
 
         try:
-            await self._call_s3("delete_object", Bucket=bucket, Key=key)
+            await self._call_s3(
+                "delete_object",
+                kwargs,
+                Bucket=bucket,
+                Key=key,
+                **version_id_kw(version_id),
+            )
         except ClientError as e:
             raise translate_boto_error(e)
 
@@ -2416,7 +2454,7 @@ class S3FileSystem(AsyncFileSystem):
         # TODO: fails if more than one bucket in list
         out = await _run_coros_in_chunks(
             [
-                self._bulk_delete(files[i : i + 1000])
+                self._bulk_delete(files[i : i + 1000], **kwargs)
                 for i in range(0, len(files), 1000)
             ],
             batch_size=3,
@@ -2830,7 +2868,15 @@ class S3File(AbstractBufferedFile):
             if self.buffer is not None:
                 logger.debug("Empty file committed %s" % self)
                 self._abort_mpu()
-                write_result = self.fs.touch(self.path, **self.kwargs)
+                if self.fs.split_path(self.path)[2]:
+                    raise ValueError(
+                        "S3 does not support touching existing versions of files"
+                    )
+                kw = dict(Key=self.key, Bucket=self.bucket, Body=b"", **self.kwargs)
+                if self.acl:
+                    kw["ACL"] = self.acl
+                write_result = self._call_s3("put_object", **kw, **match)
+                self.fs.invalidate_cache(self.fs._parent(self.path))
         elif not self.parts:
             if self.buffer is not None:
                 logger.debug("One-shot upload of %s" % self)

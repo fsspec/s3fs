@@ -5,6 +5,14 @@ Unreleased
 ----------
 
 - Recognize expired reads by the S3 error code when the error message is missing or differs (#1053)
+- Preserve exclusive-create conditions and file options when committing empty files.
+- Forward per-call S3 request options through single-object and batched deletes.
+- Delete the requested object version in ``rm_file`` when the path includes one.
+- Only return versions of the requested key from ``object_version_info``, not of other keys sharing it as a prefix.
+
+- Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
+
+- Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
 

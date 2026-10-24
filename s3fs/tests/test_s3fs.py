@@ -588,6 +588,51 @@ def test_exists_versioned(s3, version_aware):
         assert s3.exists("/".join(segments[:i]))
 
 
+@pytest.mark.parametrize("operation", ["info", "open"])
+@pytest.mark.parametrize("version_in_path", [False, True])
+@pytest.mark.parametrize("has_children", [False, True])
+def test_missing_version(s3, monkeypatch, operation, version_in_path, has_children):
+    s3 = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/missing-version"
+    s3.pipe_file(path, b"object-data")
+    valid_version = s3.info(path)["VersionId"]
+    if has_children:
+        s3.pipe_file(path + "/child", b"child-data")
+    s3.invalidate_cache()
+
+    missing_version = "00000000-0000-0000-0000-000000000000"
+    if version_in_path:
+        target = f"{path}?versionId={missing_version}"
+        kwargs = {}
+    else:
+        target = path
+        kwargs = {"version_id": missing_version}
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def record_call(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", record_call)
+    with pytest.raises(FileNotFoundError) as exc:
+        if operation == "info":
+            s3.info(target, **kwargs)
+        else:
+            with s3.open(target, "rb", **kwargs) as f:
+                f.read()
+    assert path in str(exc.value)
+    assert missing_version in str(exc.value)
+    assert isinstance(exc.value.__cause__, FileNotFoundError)
+    assert calls == ["head_object"]
+
+    # A failed version lookup must not affect a version that does exist.
+    with s3.open(path, "rb", version_id=valid_version) as f:
+        assert f.read() == b"object-data"
+    if has_children:
+        assert s3.isdir(path)
+
+
 def test_isfile(s3):
     assert not s3.isfile("")
     assert not s3.isfile("/")
@@ -774,6 +819,76 @@ def test_bulk_delete(s3):
     filelist = s3.find(test_bucket_name + "/nested")
     s3.rm(filelist)
     assert not s3.exists(test_bucket_name + "/nested/nested2/file1")
+
+
+@pytest.mark.parametrize("method", ["rm_file", "rm"])
+@pytest.mark.parametrize("override", [False, True])
+def test_delete_request_options(s3, monkeypatch, method, override):
+    defaults = {"ExpectedBucketOwner": "123456789012"}
+    fs = S3FileSystem(
+        client_kwargs={"endpoint_url": endpoint_uri},
+        s3_additional_kwargs=defaults,
+        requester_pays=True,
+    )
+    calls = []
+
+    async def delete_object(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(fs.s3), "delete_object", delete_object)
+    monkeypatch.setattr(type(fs.s3), "delete_objects", delete_objects)
+    options = (
+        {
+            "ExpectedBucketOwner": "999999999999",
+            "RequestPayer": None,
+            "MFA": "serial 123456",
+        }
+        if override
+        else {}
+    )
+    original_options = options.copy()
+    path = f"{test_bucket_name}/nested/file1"
+    getattr(fs, method)(path, **options)
+
+    assert len(calls) == 1
+    assert calls[0]["Bucket"] == test_bucket_name
+    assert calls[0]["ExpectedBucketOwner"] == (
+        "999999999999" if override else "123456789012"
+    )
+    if override:
+        assert "RequestPayer" not in calls[0]
+        assert calls[0]["MFA"] == "serial 123456"
+    else:
+        assert calls[0]["RequestPayer"] == "requester"
+    assert options == original_options
+    assert (
+        defaults == fs.s3_additional_kwargs == {"ExpectedBucketOwner": "123456789012"}
+    )
+
+
+def test_rm_request_options_reach_every_batch(s3, monkeypatch):
+    parent = f"{test_bucket_name}/batches"
+    paths = [f"{parent}/{i:04}" for i in range(1001)]
+    s3.dircache[parent] = [{"name": path, "type": "file", "size": 0} for path in paths]
+    calls = []
+
+    async def delete_objects(*args, **kwargs):
+        calls.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(type(s3.s3), "delete_objects", delete_objects)
+    s3.rm(paths, ExpectedBucketOwner="123456789012", MFA="serial 123456")
+
+    assert sorted(len(call["Delete"]["Objects"]) for call in calls) == [1, 1000]
+    for call in calls:
+        assert call["ExpectedBucketOwner"] == "123456789012"
+        assert call["MFA"] == "serial 123456"
+    assert parent not in s3.dircache
 
 
 @pytest.mark.parametrize("asynchronous", [False, True])
@@ -1023,6 +1138,21 @@ def test_s3_glob(s3):
     # Make sure glob() deals with the dot character (.) correctly.
     assert test_bucket_name + "/file.dat" in s3.glob(test_bucket_name + "/file.*")
     assert test_bucket_name + "/filexdat" not in s3.glob(test_bucket_name + "/file.*")
+
+
+@pytest.mark.parametrize("warm_cache", [False, True])
+def test_glob_implicit_directories_with_cached_children(s3, warm_cache):
+    base = test_bucket_name + "/glob-implicit"
+    nested = base + "/something/target"
+    direct = base + "/target"
+    s3.pipe_file(nested + "/folder/file.txt", b"nested")
+    s3.pipe_file(direct + "/file.txt", b"direct")
+    if warm_cache:
+        s3.ls(nested)
+
+    expected = [nested, direct]
+    assert s3.glob(base + "/**/target") == expected
+    assert s3.glob(base + "/**/target") == expected
 
 
 def test_get_list_of_summary_objects(s3):
@@ -1308,6 +1438,25 @@ def test_pipe_cat_big(s3, size):
     data = b"1234567890A" * size
     s3.pipe(test_bucket_name + "/bigfile", data)
     assert s3.cat(test_bucket_name + "/bigfile") == data
+
+
+@pytest.mark.parametrize(
+    "start,end",
+    [(None, 0), (0, 0), (1, 1), (6, 6), (-1, -1), (3, 1), (1, 0), (-1, 0), (-1, -3)],
+)
+def test_cat_file_empty_range(s3, monkeypatch, start, end):
+    path = test_bucket_name + "/empty-range"
+    s3.pipe_file(path, b"abcdef")
+    calls = []
+    call_s3 = s3._call_s3
+
+    async def recording_call_s3(method, *args, **kwargs):
+        calls.append(method)
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", recording_call_s3)
+    assert s3.cat_file(path, start=start, end=end) == b""
+    assert calls == []
 
 
 @pytest.mark.parametrize("factor", [1, 5, 6])
@@ -1952,6 +2101,23 @@ def test_versions(s3, prefix):
     assert s3.info(versioned_file_v2)
 
 
+def test_object_version_info_ignores_prefixed_keys(s3):
+    versioned_file = versioned_bucket_name + "/versioned_file"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    s3.pipe(versioned_file, b"1")
+    s3.pipe(versioned_file, b"2")
+    s3.pipe(versioned_file + ".bak", b"backup")
+    s3.pipe(versioned_file + "/nested", b"nested")
+
+    versions = s3.object_version_info(versioned_file)
+    assert len(versions) == 2
+    assert {version["Key"] for version in versions} == {"versioned_file"}
+    versions = s3.object_version_info(versioned_file + "/")
+    assert {version["Key"] for version in versions} == {"versioned_file/nested"}
+
+
 def test_list_versions_many(s3):
     # moto doesn't actually behave in the same way that s3 does here so this doesn't test
     # anything really in moto 1.2
@@ -2505,6 +2671,8 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, end=5) == data[:5]
     assert s3.cat_file(fn, start=1, end=-1) == data[1:-1]
     assert s3.cat_file(fn, start=-5) == data[-5:]
+    assert s3.cat_file(fn, start=-5, end=-1) == data[-5:-1]
+    assert s3.cat_file(fn, start=-5, end=len(data) - 1) == data[-5:-1]
 
 
 def test_async_s3_old(s3):
@@ -2603,10 +2771,15 @@ def test_with_xzarr(s3):
     nana.to_dataset().to_zarr(store=s3store, mode="w", consolidated=True, compute=True)
 
 
-def test_async_close():
+def test_async_close(s3):
     async def _():
         loop = asyncio.get_event_loop()
-        s3 = S3FileSystem(anon=False, asynchronous=True, loop=loop)
+        s3 = S3FileSystem(
+            anon=False,
+            asynchronous=True,
+            loop=loop,
+            client_kwargs={"endpoint_url": endpoint_uri},
+        )
         await s3._connect()
 
         fn = test_bucket_name + "/afile"
@@ -2874,6 +3047,39 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     s3.rm(test_file1)
 
 
+@pytest.mark.parametrize("preserve_etag", [False, True])
+@pytest.mark.parametrize("managed_copy", [False, True])
+def test_copy_multipart_object_options(s3, monkeypatch, preserve_etag, managed_copy):
+    if managed_copy:
+        monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
+    source = test_bucket_name + "/multipart-source"
+    target = test_bucket_name + "/multipart-target"
+    data = b"a" * (10 * 2**20)
+    s3.pipe_file(source, data, chunksize=5 * 2**20)
+    source_etag = s3.info(source)["ETag"]
+    assert "-" in source_etag
+
+    s3.cp_file(
+        source,
+        target,
+        preserve_etag=preserve_etag,
+        Metadata={"purpose": "copy-regression"},
+        MetadataDirective="REPLACE",
+        ContentType="application/x-s3fs-test",
+        ServerSideEncryption="AES256",
+    )
+
+    result = get_boto3_client().head_object(
+        Bucket=test_bucket_name, Key="multipart-target"
+    )
+    assert result["Metadata"] == {"purpose": "copy-regression"}
+    assert result["ContentType"] == "application/x-s3fs-test"
+    assert result["ServerSideEncryption"] == "AES256"
+    assert s3.cat_file(target) == data
+    if preserve_etag:
+        assert result["ETag"] == source_etag
+
+
 def test_sync_from_wihin_async(s3):
     # if treating as sync but within an even loop, e.g., calling from jupyter;
     # IO happens on dedicated thread.
@@ -3064,6 +3270,25 @@ def test_rm_file(s3):
     s3.rm_file(target)
     assert not s3.exists(target)
     assert not s3.exists(test_bucket_name + "/to_be_removed")
+
+
+def test_rm_file_version(s3):
+    versioned_file = versioned_bucket_name + "/versioned_file"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    with s3.open(versioned_file, "wb") as fo:
+        fo.write(b"1")
+    first_version = fo.version_id
+    with s3.open(versioned_file, "wb") as fo:
+        fo.write(b"2")
+    second_version = fo.version_id
+
+    s3.rm_file(f"{versioned_file}?versionId={first_version}")
+
+    assert s3.cat(versioned_file) == b"2"
+    versions = s3.object_version_info(versioned_file)
+    assert [version["VersionId"] for version in versions] == [second_version]
 
 
 def test_exists_isdir(s3):
@@ -3366,6 +3591,100 @@ def test_exist_after_delete(s3):
 # The below tests for exclusive writes will fail on older versions of botocore.
 old_botocore = version.parse(botocore.__version__) < version.parse("1.36.0")
 old_moto = version.parse(moto.__version__) < version.parse("5.1.11")
+
+
+@pytest.mark.xfail(
+    old_botocore, reason="botocore<1.36.0 lacks IfNoneMatch support", strict=True
+)
+@pytest.mark.parametrize("contents", [b"", b"existing data"])
+def test_empty_exclusive_write_preserves_existing_object(s3, contents):
+    path = f"{test_bucket_name}/empty-exclusive"
+    s3.pipe_file(path, contents)
+    with pytest.raises(FileExistsError):
+        with s3.open(path, "xb"):
+            pass
+    assert s3.cat_file(path) == contents
+    assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+@pytest.mark.parametrize("mode", ["wb", "xb"])
+def test_empty_buffered_write_creates_object(s3, mode):
+    path = f"{test_bucket_name}/empty-created"
+    with s3.open(path, mode):
+        pass
+    assert s3.cat_file(path) == b""
+
+
+def test_empty_buffered_commit_invalidates_cached_metadata(s3):
+    path = f"{test_bucket_name}/empty-overwrite"
+    s3.pipe_file(path, b"existing data")
+    f = s3.open(path, "wb", autocommit=False)
+    f.close()
+    s3.ls(test_bucket_name)
+    assert s3.info(path)["size"] == len(b"existing data")
+    f.commit()
+    assert s3.info(path)["size"] == 0
+    assert s3.cat_file(path) == b""
+    assert not s3.list_multipart_uploads(test_bucket_name)
+
+
+@pytest.mark.parametrize("autocommit", [True, False])
+def test_empty_buffered_write_rejects_versioned_path(s3, autocommit):
+    fs = S3FileSystem(
+        version_aware=True,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    client = get_boto3_client()
+    key = "versioned-empty-write"
+    original = client.put_object(
+        Bucket=versioned_bucket_name, Key=key, Body=b"original"
+    )["VersionId"]
+    latest = client.put_object(Bucket=versioned_bucket_name, Key=key, Body=b"latest")[
+        "VersionId"
+    ]
+    path = f"{versioned_bucket_name}/{key}"
+    with pytest.raises(ValueError, match="touching existing versions"):
+        f = fs.open(f"{path}?versionId={original}", "wb", autocommit=autocommit)
+        f.close()
+        if not autocommit:
+            f.commit()
+    assert fs.cat_file(f"{path}?versionId={original}") == b"original"
+    assert fs.cat_file(path) == b"latest"
+    versions = client.list_object_versions(Bucket=versioned_bucket_name, Prefix=key)
+    assert {item["VersionId"] for item in versions["Versions"]} == {original, latest}
+    assert not fs.list_multipart_uploads(versioned_bucket_name)
+
+
+@pytest.mark.parametrize("contents", [b"", b"x"])
+@pytest.mark.parametrize("version_aware", [False, True])
+def test_buffered_write_preserves_file_options(s3, contents, version_aware):
+    fs = S3FileSystem(
+        version_aware=version_aware,
+        client_kwargs={"endpoint_url": endpoint_uri},
+    )
+    bucket = versioned_bucket_name if version_aware else test_bucket_name
+    key = "file-options"
+    with fs.open(
+        f"{bucket}/{key}",
+        "wb",
+        acl="public-read",
+        Metadata={"unit": "mm"},
+        ContentType="application/octet-stream",
+    ) as f:
+        f.write(contents)
+    client = get_boto3_client()
+    info = client.head_object(Bucket=bucket, Key=key)
+    assert info["Metadata"] == {"unit": "mm"}
+    assert info["ContentType"] == "application/octet-stream"
+    assert info["ContentLength"] == len(contents)
+    assert any(
+        grant["Permission"] == "READ"
+        and grant["Grantee"].get("URI")
+        == "http://acs.amazonaws.com/groups/global/AllUsers"
+        for grant in client.get_object_acl(Bucket=bucket, Key=key)["Grants"]
+    )
+    if version_aware:
+        assert f.version_id == info["VersionId"]
 
 
 @pytest.mark.xfail(
@@ -3756,7 +4075,9 @@ def test_find_with_prefix_preserves_existing_full_cache(s3):
 
     assert len(s3.ls(data_dir)) == 2
 
-    s3.find(data_dir, prefix="train-", maxdepth=1)
+    assert s3.find(data_dir, prefix="train-", maxdepth=1) == [
+        data_dir + "/train-00000.parquet"
+    ]
 
     cached = {f.split("/")[-1] for f in s3.ls(data_dir)}
     assert cached == {"train-00000.parquet", "test-00000.parquet"}
