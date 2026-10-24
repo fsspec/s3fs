@@ -718,7 +718,13 @@ class S3FileSystem(AsyncFileSystem):
                 pass
         try:
             # close the actual socket
-            s3._client._endpoint.http_session._connector._close()
+            http_session = s3._client._endpoint.http_session
+            if getattr(http_session, "_sessions", None) is not None:
+                for session in http_session._sessions.values():
+                    if not session.closed:
+                        session.connector._close()
+            else:
+                http_session._connector._close()
         except AttributeError:
             # but during shutdown, it may have gone
             pass
