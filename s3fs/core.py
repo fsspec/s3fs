@@ -1161,7 +1161,7 @@ class S3FileSystem(AsyncFileSystem):
             raise FileNotFoundError
 
         try:
-            await self._call_s3("delete_bucket", Bucket=path)
+            await self._call_s3("delete_bucket", Bucket=bucket)
         except botocore.exceptions.ClientError as e:
             if "NoSuchBucket" in str(e):
                 raise FileNotFoundError(path) from e
@@ -2195,7 +2195,7 @@ class S3FileSystem(AsyncFileSystem):
                     Bucket=bucket,
                     Key=key,
                     UploadId=mpu["UploadId"],
-                    CopySource=f,
+                    CopySource=self._strip_protocol(f),
                     PartNumber=i + 1,
                 )
                 for (i, f) in enumerate(filelist)
