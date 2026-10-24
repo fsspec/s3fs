@@ -1758,9 +1758,13 @@ class S3FileSystem(AsyncFileSystem):
         if path in ["/", ""]:
             return {"name": path, "size": 0, "type": "directory"}
         version_id = _coalesce_version_id(path_version_id, version_id)
+        cached_dir = None
         if not refresh:
             out = self._ls_from_cache(fullpath)
             if out is not None:
+                # A child listing does not rule out an object with the same name.
+                # Its metadata, if cached, is in the parent listing.
+                out = self.dircache.get(self._parent(fullpath), out)
                 if self.version_aware and version_id is not None:
                     # If cached info does not match requested version_id,
                     # fallback to calling head_object
@@ -1775,7 +1779,7 @@ class S3FileSystem(AsyncFileSystem):
                     out = [o for o in out if o["name"] == fullpath]
                     if out:
                         return out[0]
-                    return {"name": path, "size": 0, "type": "directory"}
+                    cached_dir = {"name": path, "size": 0, "type": "directory"}
         head_error = None
         if key:
             try:
@@ -1824,6 +1828,9 @@ class S3FileSystem(AsyncFileSystem):
                 }
             except ClientError as e:
                 raise translate_boto_error(e, set_cause=False)
+
+        if cached_dir is not None:
+            return cached_dir
 
         try:
             # We check to see if the path is a directory by attempting to list its
@@ -1908,11 +1915,10 @@ class S3FileSystem(AsyncFileSystem):
 
         parent = self._parent(path)
         if parent in self.dircache:
-            for f in self.dircache[parent]:
-                if f["name"] == path:
-                    # If we find ourselves return whether we are a directory
-                    return f["type"] == "directory"
-            return False
+            return any(
+                f["name"] == path and f["type"] == "directory"
+                for f in self.dircache[parent]
+            )
 
         # This only returns things within the path and NOT the path object itself
         try:
