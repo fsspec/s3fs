@@ -2251,7 +2251,13 @@ class S3FileSystem(AsyncFileSystem):
         )
         part_infos = await asyncio.gather(
             *[
-                self._call_s3("head_object", Bucket=bucket1, Key=key1, PartNumber=i)
+                self._call_s3(
+                    "head_object",
+                    Bucket=bucket1,
+                    Key=key1,
+                    PartNumber=i,
+                    **version_id_kw(version1),
+                )
                 for i in range(1, total_parts + 1)
             ]
         )

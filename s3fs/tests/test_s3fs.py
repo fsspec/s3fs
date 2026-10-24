@@ -2991,6 +2991,24 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     s3.rm(test_file1)
 
 
+def test_etag_preserving_copy_of_older_version(s3):
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    source = versioned_bucket_name + "/multipart-source"
+    target = versioned_bucket_name + "/multipart-target"
+    data = b"a" * (12 * 2**20)
+    s3.pipe_file(source, data, chunksize=6 * 2**20)
+    first = s3.info(source)
+    # the latest version has the same number of parts, but smaller ones
+    s3.pipe_file(source, b"b" * (10 * 2**20), chunksize=5 * 2**20)
+
+    s3.cp_file(f"{source}?versionId={first['VersionId']}", target, preserve_etag=True)
+
+    assert s3.cat_file(target) == data
+    assert s3.info(target)["ETag"] == first["ETag"]
+
+
 @pytest.mark.parametrize("preserve_etag", [False, True])
 @pytest.mark.parametrize("managed_copy", [False, True])
 def test_copy_multipart_object_options(s3, monkeypatch, preserve_etag, managed_copy):
