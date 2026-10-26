@@ -11,6 +11,7 @@ Unreleased
 - Use the part sizes of the requested source version in ETag-preserving copies.
 
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
+- Resolve negative ``cat_file`` offsets against the size of the version being read, so crossed slices return no data instead of the whole object.
 
 - Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)

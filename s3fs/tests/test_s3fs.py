@@ -2675,6 +2675,34 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, start=-5, end=len(data) - 1) == data[-5:-1]
 
 
+@pytest.mark.parametrize(
+    "start,end", [(8, -5), (20, -5), (-1, 2), (-30, 5), (5, -30), (-30, -25)]
+)
+def test_cat_file_mixed_sign_range(s3, start, end):
+    # Bounds of different signs, or a negative bound past the start of the file,
+    # behave like a slice rather than returning the whole object
+    data = b"a string to select from"
+    fn = test_bucket_name + "/parts"
+    s3.pipe(fn, data)
+    assert s3.cat_file(fn, start=start, end=end) == data[start:end]
+
+
+def test_cat_file_negative_range_of_version(s3):
+    fn = versioned_bucket_name + "/versioned_range"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    data = b"0123456789"
+    with s3.open(fn, "wb") as fo:
+        fo.write(data)
+    first_version = fo.version_id
+    s3.pipe(fn, b"abcd")
+
+    # Negative offsets count from the end of the requested version
+    assert s3.cat_file(fn, version_id=first_version, start=-3, end=-1) == b"78"
+    assert s3.cat_file(fn, version_id=first_version, start=2, end=-2) == data[2:-2]
+
+
 def test_async_s3_old(s3):
     async def _():
         s3 = S3FileSystem(
