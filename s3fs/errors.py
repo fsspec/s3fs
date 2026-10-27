@@ -151,7 +151,7 @@ def translate_boto_error(error, message=None, set_cause=True, *args, **kwargs):
         constructor = ERROR_CODE_TO_EXCEPTION.get(code)
     if constructor:
         if not message:
-            message = error_response["Error"].get("Message", str(error))
+            message = error_response["Error"].get("Message") or str(error)
         custom_exc = constructor(message, *args, **kwargs)
     else:
         # No match found, wrap this in an IOError with the appropriate message.
