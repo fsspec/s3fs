@@ -2213,6 +2213,7 @@ class S3FileSystem(AsyncFileSystem):
                         )
                     )
                 )
+            # Fail on the first copy error, then cancel and drain its siblings.
             out = await asyncio.gather(*tasks)
             parts = [
                 {"PartNumber": i + 1, "ETag": o["CopyPartResult"]["ETag"]}
@@ -2234,8 +2235,9 @@ class S3FileSystem(AsyncFileSystem):
             try:
                 await asyncio.gather(*tasks, return_exceptions=True)
             except BaseException:
-                # Repeated cancellation can interrupt cleanup. Preserve the
-                # original failure rather than racing in-flight copies.
+                # Cancelling this gather raises even with return_exceptions=True.
+                # Stop best-effort cleanup and preserve the original merge error
+                # (or cancellation), rather than replacing it with cleanup failure.
                 pass
             else:
                 try:

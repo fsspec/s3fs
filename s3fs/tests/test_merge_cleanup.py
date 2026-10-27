@@ -148,7 +148,7 @@ class Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fs.active, 0)
         self.assertEqual(fs.events[-1], "abort")
 
-    async def test_second_cancellation_during_drain_preserves_primary(self):
+    async def test_cancellation_during_drain_preserves_primary(self):
         fs = FS(fail="copy", slow_cleanup=True)
         task = asyncio.create_task(fs._merge("dest/key", ["a", "b"]))
         await self.run_bounded(fs.cleaning.wait())
