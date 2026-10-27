@@ -4084,3 +4084,59 @@ def test_normal_ls_and_find_still_populate_dircache(s3):
     s3.ls(data_dir)
     assert data_dir in s3.dircache
     assert len(s3.dircache[data_dir]) == 2
+
+
+@pytest.mark.parametrize("operation", ["metadata", "lookup", "update", "delete", "unrelated"])
+def test_xattr_preserves_distinct_metadata_keys(monkeypatch, operation):
+    fs = S3FileSystem(anon=True, skip_instance_cache=True)
+    original = {"device_serial": "underscore", "device-serial": "hyphen"}
+    requests = []
+
+    async def call_s3(method, *args, **kwargs):
+        if method == "head_object":
+            return {"Metadata": original.copy()}
+        assert method == "copy_object"
+        requests.append(kwargs)
+        return {}
+
+    monkeypatch.setattr(fs, "_call_s3", call_s3)
+    if operation == "metadata":
+        assert fs.metadata("bucket/key") == original
+    elif operation == "lookup":
+        assert fs.getxattr("bucket/key", "device_serial") == "underscore"
+        assert fs.getxattr("bucket/key", "device-serial") == "hyphen"
+    else:
+        changes = {
+            "update": {"device_serial": "changed"},
+            "delete": {"device_serial": None},
+            "unrelated": {"other": "new"},
+        }[operation]
+        fs.setxattr("bucket/key", **changes)
+        expected = original.copy()
+        if operation == "delete":
+            del expected["device_serial"]
+        else:
+            expected.update(changes)
+        assert requests[0]["Metadata"] == expected
+        assert requests[0]["MetadataDirective"] == "REPLACE"
+
+
+def test_xattr_legacy_hyphen_alias(monkeypatch):
+    fs = S3FileSystem(anon=True, skip_instance_cache=True)
+    metadata = {"legacy-key": "value"}
+
+    async def call_s3(method, *args, **kwargs):
+        if method == "head_object":
+            return {"Metadata": metadata.copy()}
+        assert method == "copy_object"
+        metadata.clear()
+        metadata.update(kwargs["Metadata"])
+        return {}
+
+    monkeypatch.setattr(fs, "_call_s3", call_s3)
+    assert fs.getxattr("bucket/key", "legacy_key") == "value"
+    assert fs.getxattr("bucket/key", "missing") is None
+    fs.setxattr("bucket/key", legacy_key="updated", new_key="new")
+    assert metadata == {"legacy-key": "updated", "new-key": "new"}
+    fs.setxattr("bucket/key", legacy_key=None)
+    assert metadata == {"new-key": "new"}
