@@ -1967,7 +1967,7 @@ class S3FileSystem(AsyncFileSystem):
     _metadata_cache = {}
 
     async def _metadata(self, path, refresh=False, **kwargs):
-        """Return metadata of path.
+        """Return metadata of path without changing the stored attribute names.
 
         Parameters
         ----------
@@ -1984,8 +1984,7 @@ class S3FileSystem(AsyncFileSystem):
             Key=key,
             **version_id_kw(version_id),
         )
-        meta = {k.replace("_", "-"): v for k, v in response["Metadata"].items()}
-        return meta
+        return response["Metadata"]
 
     metadata = sync_wrapper(_metadata)
 
@@ -2049,13 +2048,16 @@ class S3FileSystem(AsyncFileSystem):
     async def _getxattr(self, path, attr_name, **kwargs):
         """Get an attribute from the metadata.
 
+        Exact names take precedence over legacy underscore-to-hyphen aliases.
+
         Examples
         --------
         >>> mys3fs.getxattr('mykey', 'attribute_1')  # doctest: +SKIP
         'value_1'
         """
-        attr_name = attr_name.replace("_", "-")
         xattr = await self._metadata(path, **kwargs)
+        if attr_name not in xattr:
+            attr_name = attr_name.replace("_", "-")
         if attr_name in xattr:
             return xattr[attr_name]
         return None
@@ -2073,7 +2075,8 @@ class S3FileSystem(AsyncFileSystem):
         kw_args : key-value pairs like field="value", where the values must be
             strings. Does not alter existing fields, unless
             the field appears here - if the value is None, delete the
-            field.
+            field. Existing attribute names are matched exactly. For new names,
+            underscores are converted to hyphens for backwards compatibility.
         copy_kwargs : dict, optional
             dictionary of additional params to use for the underlying
             s3.copy_object.
@@ -2088,9 +2091,12 @@ class S3FileSystem(AsyncFileSystem):
         .. _Metadata Reference: http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-metadata
         """
 
-        kw_args = {k.replace("_", "-"): v for k, v in kw_args.items()}
         bucket, key, version_id = self.split_path(path)
         metadata = await self._metadata(path)
+        # Preserve exact existing keys, retaining legacy aliases for new keys.
+        kw_args = {
+            k if k in metadata else k.replace("_", "-"): v for k, v in kw_args.items()
+        }
         metadata.update(**kw_args)
         copy_kwargs = copy_kwargs or {}
 
@@ -2760,6 +2766,8 @@ class S3File(AbstractBufferedFile):
 
     def getxattr(self, xattr_name, **kwargs):
         """Get an attribute from the metadata.
+
+        Exact names take precedence over legacy underscore-to-hyphen aliases.
         See :func:`~s3fs.S3Filesystem.getxattr`.
 
         Examples
