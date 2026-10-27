@@ -2095,8 +2095,7 @@ class S3FileSystem(AsyncFileSystem):
         metadata = await self._metadata(path)
         # Preserve exact existing keys, retaining legacy aliases for new keys.
         kw_args = {
-            k if k in metadata else k.replace("_", "-"): v
-            for k, v in kw_args.items()
+            k if k in metadata else k.replace("_", "-"): v for k, v in kw_args.items()
         }
         metadata.update(**kw_args)
         copy_kwargs = copy_kwargs or {}

@@ -4086,7 +4086,9 @@ def test_normal_ls_and_find_still_populate_dircache(s3):
     assert len(s3.dircache[data_dir]) == 2
 
 
-@pytest.mark.parametrize("operation", ["metadata", "lookup", "update", "delete", "unrelated"])
+@pytest.mark.parametrize(
+    "operation", ["metadata", "lookup", "update", "delete", "unrelated"]
+)
 def test_xattr_preserves_distinct_metadata_keys(monkeypatch, operation):
     fs = S3FileSystem(anon=True, skip_instance_cache=True)
     original = {"device_serial": "underscore", "device-serial": "hyphen"}
