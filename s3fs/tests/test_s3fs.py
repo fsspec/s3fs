@@ -4084,3 +4084,27 @@ def test_normal_ls_and_find_still_populate_dircache(s3):
     s3.ls(data_dir)
     assert data_dir in s3.dircache
     assert len(s3.dircache[data_dir]) == 2
+
+
+@pytest.mark.parametrize(
+    "failed_method", ["upload_part_copy", "complete_multipart_upload"]
+)
+def test_merge_failure_aborts_multipart_upload(s3, monkeypatch, failed_method):
+    s3.pipe(a, b"a" * 5 * 2**20)
+    s3.pipe(b, b"b" * 5 * 2**20)
+    original_call = s3._call_s3
+    error = RuntimeError("injected merge failure")
+
+    async def call(method, *args, **kwargs):
+        if method == failed_method:
+            raise error
+        return await original_call(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", call)
+    with pytest.raises(RuntimeError) as caught:
+        s3.merge(test_bucket_name + "/joined", [a, b])
+    assert caught.value is error
+    uploads = sync(
+        s3.loop, original_call, "list_multipart_uploads", Bucket=test_bucket_name
+    )
+    assert not uploads.get("Uploads")
