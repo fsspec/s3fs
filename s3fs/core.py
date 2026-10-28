@@ -146,6 +146,17 @@ _PRESERVE_KWARGS = [
     "Metadata",
 ]
 
+# Headers and user metadata that copy_object keeps from the source object
+_COPY_KWARGS = [
+    "CacheControl",
+    "ContentDisposition",
+    "ContentEncoding",
+    "ContentLanguage",
+    "ContentType",
+    "Expires",
+    "Metadata",
+]
+
 key_acls = {
     "private",
     "public-read",
@@ -2359,7 +2370,15 @@ class S3FileSystem(AsyncFileSystem):
         size = info["size"]
 
         _, _, parts_suffix = info.get("ETag", "").strip('"').partition("-")
-        if preserve_etag and parts_suffix:
+        etag_copy = preserve_etag and parts_suffix
+        multipart = etag_copy or size > MANAGED_COPY_THRESHOLD
+        if multipart and kwargs.get("MetadataDirective") != "REPLACE":
+            # unlike copy_object, a multipart copy does not keep the source's headers
+            head = await self._call_s3(
+                "head_object", Bucket=bucket, Key=key, **version_id_kw(vers)
+            )
+            kwargs = {**{k: head[k] for k in _COPY_KWARGS if k in head}, **kwargs}
+        if etag_copy:
             await self._copy_etag_preserved(
                 path1, path2, size, total_parts=int(parts_suffix), **kwargs
             )
