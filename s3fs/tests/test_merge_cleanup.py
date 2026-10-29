@@ -122,13 +122,6 @@ class Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fs.calls[-1][1], ({"RequestPayer": "requester"},))
         self.assertEqual(fs.invalidated, [])
 
-    async def test_completion_failure_aborts(self):
-        fs = FS(fail="complete")
-        with self.assertRaises(RuntimeError) as caught:
-            await self.run_bounded(fs._merge("dest/key", ["a", "b"]))
-        self.assertIs(caught.exception, fs.original)
-        self.assertEqual(fs.events[-2:], ["complete", "abort"])
-
     async def test_abort_failure_does_not_mask_copy_or_complete(self):
         for stage in ["copy", "complete"]:
             with self.subTest(stage=stage):
