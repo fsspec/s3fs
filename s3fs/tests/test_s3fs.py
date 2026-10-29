@@ -1258,6 +1258,18 @@ def test_move(s3, recursive):
     assert not s3.exists(fn)
 
 
+def test_move_directory_recursive(s3):
+    # S3 directories are key prefixes with no object behind them, so a
+    # recursive mv must not try to copy the directory entries themselves.
+    src = test_bucket_name + "/mvsrc"
+    dst = test_bucket_name + "/mvdst"
+    s3.pipe({src + "/x": b"x", src + "/sub/y": b"y"})
+    s3.mv(src, dst, recursive=True)
+    assert s3.cat(dst + "/x") == b"x"
+    assert s3.cat(dst + "/sub/y") == b"y"
+    assert not s3.exists(src)
+
+
 def test_get_put(s3, tmpdir):
     test_file = str(tmpdir.join("test.json"))
 

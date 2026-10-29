@@ -2356,6 +2356,11 @@ class S3FileSystem(AsyncFileSystem):
         bucket, key, vers = self.split_path(path1)
 
         info = await self._info(path1, bucket, key, version_id=vers)
+        if info["type"] == "directory":
+            # A prefix has no object to copy. A recursive copy lists the
+            # directories too, and mv() passes on_error="raise", so copying
+            # one must succeed as a no-op rather than raise FileNotFoundError.
+            return
         size = info["size"]
 
         _, _, parts_suffix = info.get("ETag", "").strip('"').partition("-")
