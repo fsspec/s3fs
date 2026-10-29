@@ -397,6 +397,42 @@ In order for this to function the user must have the necessary IAM permissions t
 a GetObjectVersion
 
 
+For objects with many versions, ``object_version_iter`` yields version metadata
+without collecting all pages first. ``object_version_info`` continues to return a
+list. Both methods require ``version_aware=True`` and return object versions, not
+delete markers. An object path selects that exact key; a bucket path or a path
+ending in ``/`` selects a prefix. Listing versions requires the corresponding S3
+list-versions permission.
+
+.. code-block:: python
+
+   from contextlib import closing
+
+   with closing(s3.object_version_iter('versioned_bucket/object', MaxKeys=100)) as versions:
+       for index, version in enumerate(versions):
+           print(version['VersionId'])
+           if index == 9:
+               break
+
+Pages are requested only when needed and are not prefetched. ``MaxKeys`` controls
+the service's page size; filtering out other keys or delete markers may require
+additional pages before a version can be yielded. Results keep the service's
+order. Memory usage is bounded by response pages, unless the caller collects the
+results. Close the iterator when stopping early, as shown above.
+
+For an asynchronous filesystem, use ``_object_version_iter`` with ``async for``.
+The existing async session setup and cleanup requirements still apply:
+
+.. code-block:: python
+
+   from contextlib import aclosing
+
+   async with aclosing(s3._object_version_iter('versioned_bucket/object')) as versions:
+       async for version in versions:
+           print(version['VersionId'])
+
+
+
 Contents
 ========
 
