@@ -1270,6 +1270,33 @@ def test_move_directory_recursive(s3):
     assert not s3.exists(src)
 
 
+def test_move_directory_recursive_with_placeholders(s3):
+    # Placeholder objects ("dir/") mark directories, and are all that keeps an
+    # empty one; a recursive mv must carry them over, not just delete them.
+    client = get_boto3_client()
+    src = test_bucket_name + "/mvphsrc"
+    dst = test_bucket_name + "/mvphdst"
+    for key in ("mvphsrc/", "mvphsrc/empty/"):
+        client.put_object(Bucket=test_bucket_name, Key=key, Body=b"")
+    s3.pipe({src + "/x": b"x", src + "/sub/y": b"y"})
+    s3.invalidate_cache()
+    s3.mv(src, dst, recursive=True)
+    s3.invalidate_cache()
+    keys = sorted(
+        o["Key"]
+        for o in client.list_objects_v2(Bucket=test_bucket_name, Prefix="mvph")[
+            "Contents"
+        ]
+    )
+    assert keys == [
+        "mvphdst/",
+        "mvphdst/empty/",
+        "mvphdst/sub/y",
+        "mvphdst/x",
+    ]
+    assert s3.isdir(dst + "/empty")
+
+
 def test_get_put(s3, tmpdir):
     test_file = str(tmpdir.join("test.json"))
 

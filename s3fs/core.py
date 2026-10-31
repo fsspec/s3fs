@@ -2359,7 +2359,22 @@ class S3FileSystem(AsyncFileSystem):
         if info["type"] == "directory":
             # A prefix has no object to copy. A recursive copy lists the
             # directories too, and mv() passes on_error="raise", so copying
-            # one must succeed as a no-op rather than raise FileNotFoundError.
+            # one must not raise FileNotFoundError. A placeholder object
+            # ("dir/") is copied, though: it is what keeps an empty
+            # directory, and mv() deletes the source's after the copy.
+            if key:
+                placeholder = key.rstrip("/") + "/"
+                try:
+                    await self._call_s3(
+                        "head_object",
+                        Bucket=bucket,
+                        Key=placeholder,
+                        **version_id_kw(vers),
+                    )
+                except FileNotFoundError:
+                    return
+                path2 = self._strip_protocol(path2).rstrip("/") + "/"
+                await self._copy_basic(f"{bucket}/{placeholder}", path2, **kwargs)
             return
         size = info["size"]
 
