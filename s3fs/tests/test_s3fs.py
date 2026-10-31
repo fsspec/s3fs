@@ -3070,6 +3070,34 @@ def test_copy_multipart_object_options(s3, monkeypatch, preserve_etag, managed_c
         assert result["ETag"] == source_etag
 
 
+@pytest.mark.parametrize("preserve_etag", [False, True])
+@pytest.mark.parametrize("managed_copy", [False, True])
+def test_copy_keeps_source_metadata(s3, monkeypatch, preserve_etag, managed_copy):
+    if managed_copy:
+        monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
+    source = test_bucket_name + "/multipart-source"
+    target = test_bucket_name + "/multipart-target"
+    data = b"a" * (10 * 2**20)
+    s3.pipe_file(
+        source,
+        data,
+        chunksize=5 * 2**20,
+        ContentType="text/csv",
+        CacheControl="max-age=60",
+        Metadata={"source": "upload"},
+    )
+
+    s3.cp_file(source, target, preserve_etag=preserve_etag)
+
+    result = get_boto3_client().head_object(
+        Bucket=test_bucket_name, Key="multipart-target"
+    )
+    assert result["ContentType"] == "text/csv"
+    assert result["CacheControl"] == "max-age=60"
+    assert result["Metadata"] == {"source": "upload"}
+    assert s3.cat_file(target) == data
+
+
 def test_sync_from_wihin_async(s3):
     # if treating as sync but within an even loop, e.g., calling from jupyter;
     # IO happens on dedicated thread.
