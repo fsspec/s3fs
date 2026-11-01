@@ -2153,10 +2153,135 @@ def test_fsspec_versions_multiple(s3):
     )
     assert isinstance(fs, S3FileSystem)
     assert fs.version_aware
+    assert paths == [fs._strip_protocol(url) for url in urls]
     for path in paths:
         with fs.open(path, "rb") as fo:
             contents = fo.read()
             assert contents == version_lookup[fo.version_id]
+
+
+@pytest.mark.parametrize("detail", [False, True])
+@pytest.mark.parametrize("deleted", [False, True])
+def test_glob_exact_version(s3, detail, deleted):
+    fs = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/glob-version"
+    with fs.open(path, "wb") as f:
+        f.write(b"old")
+    version = f.version_id
+    fs.pipe(path, b"new contents")
+    if deleted:
+        get_boto3_client().delete_object(
+            Bucket=versioned_bucket_name, Key="glob-version"
+        )
+    url = f"s3://{path}?versionId={version}"
+    result = fs.glob(url, detail=detail)
+    assert list(result) == [fs._strip_protocol(url)]
+    if detail:
+        assert result[fs._strip_protocol(url)]["name"] == fs._strip_protocol(url)
+        assert result[fs._strip_protocol(url)]["VersionId"] == version
+        assert result[fs._strip_protocol(url)]["size"] == 3
+    else:
+        with fs.open(result[0], "rb") as f:
+            assert f.read() == b"old"
+    missing = fs.glob(path + "?versionId=missing", detail=detail)
+    assert missing == ({} if detail else [])
+    assert fs.glob(path + "-absent?versionId=" + version, detail=detail) == (
+        {} if detail else []
+    )
+    with pytest.raises(ValueError, match="maxdepth must be at least 1"):
+        fs.glob(url, maxdepth=0, detail=detail)
+
+
+def test_fsspec_versions_mixed_with_glob(s3):
+    fs = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/mixed-version"
+    with fs.open(path, "wb") as f:
+        f.write(b"old")
+    url = f"{path}?versionId={f.version_id}"
+    fs.pipe(path, b"new")
+    fs.pipe(versioned_bucket_name + "/part1", b"part1")
+    fs.pipe(versioned_bucket_name + "/part2", b"part2")
+    _, _, paths = fsspec.core.get_fs_token_paths(
+        ["s3://" + url, "s3://" + versioned_bucket_name + "/part?"],
+        storage_options={
+            "version_aware": True,
+            "client_kwargs": {"endpoint_url": endpoint_uri},
+        },
+    )
+    assert paths == [
+        url,
+        versioned_bucket_name + "/part1",
+        versioned_bucket_name + "/part2",
+    ]
+    for mode in ["wb", "xb"]:
+        _, _, paths = fsspec.core.get_fs_token_paths(
+            ["s3://" + url],
+            mode=mode,
+            storage_options={
+                "version_aware": True,
+                "client_kwargs": {"endpoint_url": endpoint_uri},
+            },
+        )
+        assert paths == [url]
+
+
+@pytest.mark.parametrize("error", [PermissionError, ValueError])
+def test_glob_version_preserves_errors(s3, monkeypatch, error):
+    fs = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+
+    async def fail(*args, **kwargs):
+        raise error("test error")
+
+    monkeypatch.setattr(fs, "_info", fail)
+    with pytest.raises(error, match="test error"):
+        fs.glob(versioned_bucket_name + "/file?versionId=version")
+
+
+def test_glob_opaque_version_id(s3, monkeypatch):
+    fs = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    path = versioned_bucket_name + "/file?versionId=opaque/+?*[]="
+
+    cached = {"name": versioned_bucket_name + "/file", "type": "file", "size": 1}
+
+    async def info(requested_path, **kwargs):
+        assert requested_path == path
+        return cached
+
+    monkeypatch.setattr(fs, "_info", info)
+    assert fs.glob("s3://" + path) == [path]
+    result = fs.glob("s3://" + path, detail=True)
+    assert result[path]["name"] == path
+    assert result[path] is not cached
+    assert cached["name"] == versioned_bucket_name + "/file"
+
+
+@pytest.mark.parametrize(
+    "version_aware,path",
+    [
+        (False, "bucket/key?versionId=version"),
+        (True, "bucket/key?versionId="),
+        (True, "bucket/?versionId=version"),
+        (True, "bucket/key??versionId=version"),
+        (True, "bucket/key*?versionId=version"),
+        (True, "bucket/key[12]?versionId=version"),
+    ],
+)
+def test_glob_version_fallback(monkeypatch, version_aware, path):
+    fs = S3FileSystem(anon=True, version_aware=version_aware)
+
+    async def glob(self, requested_path, **kwargs):
+        assert requested_path == path
+        assert kwargs == {"maxdepth": 2, "detail": True, "withdirs": False}
+        return "delegated"
+
+    monkeypatch.setattr(fsspec.asyn.AsyncFileSystem, "_glob", glob)
+    assert fs.glob(path, maxdepth=2, detail=True, withdirs=False) == "delegated"
+
+
+def test_glob_version_conflicting_selector():
+    fs = S3FileSystem(anon=True, version_aware=True)
+    with pytest.raises(ValueError):
+        fs.glob("bucket/key?versionId=first", version_id="second")
 
 
 def test_versioned_file_fullpath(s3):
