@@ -9,6 +9,7 @@ import os
 import socket
 import weakref
 import re
+from glob import has_magic
 
 from urllib3.exceptions import IncompleteRead
 
@@ -963,10 +964,24 @@ class S3FileSystem(AsyncFileSystem):
         if versions and version_id and version_id != "null":
             f["name"] += f"?versionId={version_id}"
 
-    async def _glob(self, path, **kwargs):
+    async def _glob(self, path, maxdepth=None, **kwargs):
         if path.startswith("*"):
             raise ValueError("Cannot traverse all of S3")
-        return await super()._glob(path, **kwargs)
+        bucket, key, version_id = self.split_path(path)
+        if key and version_id and not has_magic(bucket + "/" + key):
+            # A version selector is not a wildcard. Resolve the exact version,
+            # including when a delete marker hides the current object.
+            if maxdepth is not None and maxdepth < 1:
+                raise ValueError("maxdepth must be at least 1")
+            path = self._strip_protocol(path)
+            detail = kwargs.pop("detail", False)
+            kwargs.pop("withdirs", None)
+            try:
+                info = await self._info(path, **kwargs)
+            except FileNotFoundError:
+                return {} if detail else []
+            return {path: dict(info, name=path)} if detail else [path]
+        return await super()._glob(path, maxdepth=maxdepth, **kwargs)
 
     async def _find(
         self, path, maxdepth=None, withdirs=None, detail=False, prefix="", **kwargs
