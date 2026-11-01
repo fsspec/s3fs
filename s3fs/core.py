@@ -918,6 +918,12 @@ class S3FileSystem(AsyncFileSystem):
         remaining = max_items
         async for i in self._list_pages(method, **kwargs):
             for l in i.get("CommonPrefixes", []):
+                if prefix[-1:] in ("", "/") and l["Prefix"] == prefix + "/":
+                    # A key of "/" (or "dir//") makes S3 report a common prefix
+                    # naming the directory being listed. That key is yielded
+                    # from Contents below, so keeping this would list the same
+                    # name twice, the second time as a directory.
+                    continue
                 c = {
                     "Key": l["Prefix"][:-1],
                     "Size": 0,
