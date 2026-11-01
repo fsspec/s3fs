@@ -1329,6 +1329,16 @@ class S3FileSystem(AsyncFileSystem):
                 and (start < 0) == (end < 0)
             ):
                 return b""
+            if (start is not None and start < 0 and end is not None) or (
+                end is not None and end < 0
+            ):
+                # Resolve negative offsets like a slice, against the size of the
+                # version being read. An empty or crossed range can't be sent:
+                # S3 ignores an invalid Range and returns the whole object.
+                size = (await self._info(path, version_id=version_id or vers))["size"]
+                start, end, _ = slice(start, end).indices(size)
+                if start >= end:
+                    return b""
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
@@ -2251,7 +2261,13 @@ class S3FileSystem(AsyncFileSystem):
         )
         part_infos = await asyncio.gather(
             *[
-                self._call_s3("head_object", Bucket=bucket1, Key=key1, PartNumber=i)
+                self._call_s3(
+                    "head_object",
+                    Bucket=bucket1,
+                    Key=key1,
+                    PartNumber=i,
+                    **version_id_kw(version1),
+                )
                 for i in range(1, total_parts + 1)
             ]
         )

@@ -2675,6 +2675,34 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, start=-5, end=len(data) - 1) == data[-5:-1]
 
 
+@pytest.mark.parametrize(
+    "start,end", [(8, -5), (20, -5), (-1, 2), (-30, 5), (5, -30), (-30, -25)]
+)
+def test_cat_file_mixed_sign_range(s3, start, end):
+    # Bounds of different signs, or a negative bound past the start of the file,
+    # behave like a slice rather than returning the whole object
+    data = b"a string to select from"
+    fn = test_bucket_name + "/parts"
+    s3.pipe(fn, data)
+    assert s3.cat_file(fn, start=start, end=end) == data[start:end]
+
+
+def test_cat_file_negative_range_of_version(s3):
+    fn = versioned_bucket_name + "/versioned_range"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    data = b"0123456789"
+    with s3.open(fn, "wb") as fo:
+        fo.write(data)
+    first_version = fo.version_id
+    s3.pipe(fn, b"abcd")
+
+    # Negative offsets count from the end of the requested version
+    assert s3.cat_file(fn, version_id=first_version, start=-3, end=-1) == b"78"
+    assert s3.cat_file(fn, version_id=first_version, start=2, end=-2) == data[2:-2]
+
+
 def test_async_s3_old(s3):
     async def _():
         s3 = S3FileSystem(
@@ -3045,6 +3073,24 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     assert file_1["ETag"] == file_2["ETag"]
 
     s3.rm(test_file1)
+
+
+def test_etag_preserving_copy_of_older_version(s3):
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    source = versioned_bucket_name + "/multipart-source"
+    target = versioned_bucket_name + "/multipart-target"
+    data = b"a" * (12 * 2**20)
+    s3.pipe_file(source, data, chunksize=6 * 2**20)
+    first = s3.info(source)
+    # the latest version has the same number of parts, but smaller ones
+    s3.pipe_file(source, b"b" * (10 * 2**20), chunksize=5 * 2**20)
+
+    s3.cp_file(f"{source}?versionId={first['VersionId']}", target, preserve_etag=True)
+
+    assert s3.cat_file(target) == data
+    assert s3.info(target)["ETag"] == first["ETag"]
 
 
 @pytest.mark.parametrize("preserve_etag", [False, True])

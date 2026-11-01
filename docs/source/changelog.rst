@@ -9,8 +9,10 @@ Unreleased
 - Forward per-call S3 request options through single-object and batched deletes.
 - Delete the requested object version in ``rm_file`` when the path includes one.
 - Only return versions of the requested key from ``object_version_info``, not of other keys sharing it as a prefix.
+- Use the part sizes of the requested source version in ETag-preserving copies.
 
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
+- Resolve negative ``cat_file`` offsets against the size of the version being read, so crossed slices return no data instead of the whole object.
 
 - Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
