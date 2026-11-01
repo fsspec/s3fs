@@ -111,3 +111,42 @@ class Tests(unittest.IsolatedAsyncioTestCase):
             await f.read()
         self.assertTrue(f.closed)
         self.assertEqual(body.closes, 1)
+
+    async def test_cancel_during_body_read_closes_once(self):
+        f, body, calls = await self.make_file()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocked_read(length=-1):
+            entered.set()
+            await release.wait()
+            return b"data"
+
+        body.read = blocked_read
+
+        async def reader():
+            async with f:
+                await f.read()
+
+        pending = asyncio.create_task(reader())
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            pending.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await pending
+            self.assertTrue(f.closed)
+            self.assertEqual(body.closes, 1)
+            self.assertEqual(f.loc, 0)
+            await f.close()
+            await f.close()
+            self.assertEqual(body.closes, 1)
+            with self.assertRaisesRegex(ValueError, "closed"):
+                await f.read()
+            self.assertEqual(len(calls), 1)
+        finally:
+            if not pending.done():
+                pending.cancel()
+                try:
+                    await pending
+                except asyncio.CancelledError:
+                    pass
