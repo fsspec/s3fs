@@ -16,6 +16,7 @@ Unreleased
 - Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
+- Retry interrupted chunk reads in parallel ``get_file`` and ``cat_file`` downloads
 
 2026.9.0
 --------
