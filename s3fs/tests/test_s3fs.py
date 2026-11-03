@@ -1406,22 +1406,27 @@ def test_parallel_download_closes_bodies(tmp_path, monkeypatch, method, error):
 @pytest.mark.parametrize("method", ["get_file", "cat_file"])
 def test_parallel_download_retries_interrupted_read(tmp_path, monkeypatch, method):
     data = b"parallel download"
+    bodies = []
     ranges = []
-    interrupted = []
+    reads = []
 
     class Body(io.BytesIO):
         async def read(self, *args):
-            if not interrupted:
-                interrupted.append(True)
+            reads.append(self)
+            if len(reads) == 1:
                 raise TimeoutError("interrupted read")
             return super().read(*args)
 
     async def get_object(method, **kwargs):
-        if "Range" not in kwargs:
-            return {"Body": io.BytesIO(data), "ContentLength": len(data)}
-        ranges.append(kwargs["Range"])
-        start, end = map(int, kwargs["Range"].removeprefix("bytes=").split("-"))
-        return {"Body": Body(data[start : end + 1])}
+        assert method == "get_object"
+        if "Range" in kwargs:
+            ranges.append(kwargs["Range"])
+            start, end = map(int, kwargs["Range"].removeprefix("bytes=").split("-"))
+            body = Body(data[start : end + 1])
+        else:
+            body = Body(data)
+        bodies.append(body)
+        return {"Body": body, "ContentLength": len(body.getvalue())}
 
     fs = S3FileSystem(asynchronous=True, skip_instance_cache=True)
     monkeypatch.setattr(fs, "_call_s3", get_object)
@@ -1439,7 +1444,8 @@ def test_parallel_download_retries_interrupted_read(tmp_path, monkeypatch, metho
         download = fs._cat_file("test/download", chunksize=10, max_concurrency=2)
     result = asyncio.run(download)
     assert (destination.read_bytes() if method == "get_file" else result) == data
-    assert sorted(ranges) == ["bytes=0-9", "bytes=0-9", "bytes=10-16"]
+    assert ranges == ["bytes=0-9", "bytes=10-16", "bytes=0-9"]
+    assert all(body.closed for body in bodies)
 
 
 @pytest.mark.parametrize("size", [2**10, 10 * 2**20])
