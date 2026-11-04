@@ -228,6 +228,23 @@ def version_id_kw(version_id):
         return {}
 
 
+def _completed_part(mpu, part_number, response, requested=None):
+    """Describe an uploaded part for complete_multipart_upload.
+
+    S3 only completes an upload created with a ChecksumAlgorithm if every
+    part carries its checksum for that algorithm. ``requested`` is the
+    ChecksumAlgorithm sent to create_multipart_upload; the response's echo is
+    only a fallback, since not every S3-compatible server returns it.
+    """
+    part = {"PartNumber": part_number, "ETag": response["ETag"]}
+    algorithm = requested or mpu.get("ChecksumAlgorithm")
+    if algorithm:
+        checksum = "Checksum" + algorithm.upper()
+        if checksum in response:
+            part[checksum] = response[checksum]
+    return part
+
+
 def _coalesce_version_id(*args):
     """Helper to coalesce a list of version_ids down to one"""
     version_ids = set(args)
@@ -445,6 +462,12 @@ class S3FileSystem(AsyncFileSystem):
                 raise RuntimeError("please await ``.set_session`` before anything else")
             self.connect()
         return self._s3
+
+    def _requested_checksum_algorithm(self, kwargs):
+        """The ChecksumAlgorithm _call_s3 sends with these per-call kwargs"""
+        return kwargs.get("ChecksumAlgorithm") or self.s3_additional_kwargs.get(
+            "ChecksumAlgorithm"
+        )
 
     def _filter_kwargs(self, s3_method, kwargs):
         return self._kwargs_helper.filter_dict(s3_method.__name__, kwargs)
@@ -1452,6 +1475,7 @@ class S3FileSystem(AsyncFileSystem):
             mpu = await self._call_s3(
                 "create_multipart_upload", Bucket=bucket, Key=key, **kwargs
             )
+            checksum_algorithm = self._requested_checksum_algorithm(kwargs)
             ranges = list(range(0, len(data), chunksize))
             inds = list(range(0, len(ranges), concurrency)) + [len(ranges)]
             parts = []
@@ -1471,7 +1495,7 @@ class S3FileSystem(AsyncFileSystem):
                         ]
                     )
                     parts.extend(
-                        {"PartNumber": i + 1, "ETag": o["ETag"]}
+                        _completed_part(mpu, i + 1, o, checksum_algorithm)
                         for i, o in zip(range(start, stop), out)
                     )
                 await self._call_s3(
@@ -1543,9 +1567,10 @@ class S3FileSystem(AsyncFileSystem):
                         callback=callback,
                         max_concurrency=max_concurrency,
                     )
+                    checksum_algorithm = self._requested_checksum_algorithm(kwargs)
                     parts = [
-                        {"PartNumber": i + 1, "ETag": o["ETag"]}
-                        for i, o in enumerate(out)
+                        _completed_part(mpu, i, o, checksum_algorithm)
+                        for i, o in enumerate(out, 1)
                     ]
                     await self._call_s3(
                         "complete_multipart_upload",
@@ -2842,10 +2867,10 @@ class S3File(AbstractBufferedFile):
                     Key=key,
                 )
 
-                part_header = {"PartNumber": part, "ETag": out["ETag"]}
-                if "ChecksumSHA256" in out:
-                    part_header["ChecksumSHA256"] = out["ChecksumSHA256"]
-                self.parts.append(part_header)
+                requested = self.fs._requested_checksum_algorithm(
+                    self.s3_additional_kwargs
+                )
+                self.parts.append(_completed_part(self.mpu, part, out, requested))
 
             def n_bytes_left() -> int:
                 return len(self.buffer.getbuffer()) - self.buffer.tell()
