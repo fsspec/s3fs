@@ -4084,3 +4084,21 @@ def test_normal_ls_and_find_still_populate_dircache(s3):
     s3.ls(data_dir)
     assert data_dir in s3.dircache
     assert len(s3.dircache[data_dir]) == 2
+
+
+def test_rm_multiple_buckets(s3):
+    other_bucket = "test-other"
+    get_boto3_client().create_bucket(Bucket=other_bucket)
+    paths = [
+        f"{test_bucket_name}/first",
+        f"{other_bucket}/second",
+        f"{test_bucket_name}/third",
+    ]
+    s3.pipe({path: b"data" for path in paths})
+    untouched = f"{test_bucket_name}/untouched"
+    s3.pipe(untouched, b"keep")
+
+    s3.rm(paths)
+
+    assert not any(s3.exists(path) for path in paths)
+    assert s3.cat(untouched) == b"keep"
