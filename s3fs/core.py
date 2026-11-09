@@ -1374,7 +1374,17 @@ class S3FileSystem(AsyncFileSystem):
                     version_id=version_id or vers,
                 )
 
-        return await _error_wrapper(_call_and_read, retries=self.retries)
+        try:
+            return await _error_wrapper(_call_and_read, retries=self.retries)
+        except OSError as ex:
+            cause = ex.__cause__
+            if (
+                isinstance(cause, ClientError)
+                and cause.response["Error"].get("Code") == "InvalidRange"
+            ):
+                # S3 rejects a range with no bytes in it, which a slice returns empty
+                return b""
+            raise
 
     async def _cat_file_concurrent(
         self,

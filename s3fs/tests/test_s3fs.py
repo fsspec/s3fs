@@ -1459,6 +1459,34 @@ def test_cat_file_empty_range(s3, monkeypatch, start, end):
     assert calls == []
 
 
+@pytest.mark.parametrize(
+    "data,start,end",
+    [
+        (b"abcdef", 6, None),
+        (b"abcdef", 6, 8),
+        (b"abcdef", 20, None),
+        (b"abcdef", 20, 30),
+        (b"", 0, None),
+        (b"", None, 4),
+        (b"", 0, 4),
+        (b"", 2, 4),
+    ],
+)
+def test_cat_file_range_past_end(s3, data, start, end):
+    # S3 answers these with InvalidRange, where a slice of the object is empty
+    path = test_bucket_name + "/past-end"
+    s3.pipe_file(path, data)
+    assert s3.cat_file(path, start=start, end=end) == b""
+
+
+def test_cat_ranges_with_zero_byte_object(s3):
+    full = test_bucket_name + "/has-data"
+    empty = test_bucket_name + "/zero-byte"
+    s3.pipe_file(full, b"abcdef")
+    s3.pipe_file(empty, b"")
+    assert s3.cat_ranges([full, empty], 0, 4, on_error="raise") == [b"abcd", b""]
+
+
 @pytest.mark.parametrize("factor", [1, 5, 6])
 def test_cat_file_parallel(s3, factor):
     chunksize = 5 * 2**20
