@@ -216,6 +216,14 @@ async def _error_wrapper(func, *, args=(), kwargs=None, retries):
     raise err
 
 
+def _is_expired_token(error):
+    cause = error.__cause__
+    return (
+        isinstance(cause, ClientError)
+        and cause.response.get("Error", {}).get("Code") == "ExpiredToken"
+    )
+
+
 def version_id_kw(version_id):
     """Helper to make versionId kwargs.
 
@@ -428,6 +436,7 @@ class S3FileSystem(AsyncFileSystem):
         self.cache_regions = cache_regions
         self._s3 = None
         self._set_session_lock = asyncio.Lock()
+        self._refresh_session_lock = asyncio.Lock()
         self.session = session
         self._session_is_owned = (
             session is None
@@ -456,15 +465,31 @@ class S3FileSystem(AsyncFileSystem):
             return self._s3
 
     async def _call_s3(self, method, *akwarglist, **kwargs):
-        await self.set_session()
+        client = await self.set_session()
         s3 = await self.get_s3(kwargs.get("Bucket"))
-        method = getattr(s3, method)
+        method_name = method
+        method = getattr(s3, method_name)
         kw2 = kwargs.copy()
         kw2.pop("Body", None)
         logger.debug("CALL: %s - %s - %s", method.__name__, akwarglist, kw2)
         additional_kwargs = self._get_s3_method_kwargs(method, *akwarglist, **kwargs)
+        try:
+            return await _error_wrapper(
+                method, kwargs=additional_kwargs, retries=self.retries
+            )
+        except PermissionError as e:
+            if not (self._session_is_owned and _is_expired_token(e)):
+                raise
+        # Temporary credentials expired. A new session resolves credentials again
+        # (environment, shared files, ...), which may now hold fresh ones.
+        logger.debug("Credentials expired; refreshing session for %s", method_name)
+        async with self._refresh_session_lock:
+            # Calls that failed on the same client share a single refresh.
+            if self._s3 is client:
+                await self.set_session(refresh=True)
+        s3 = await self.get_s3(kwargs.get("Bucket"))
         return await _error_wrapper(
-            method, kwargs=additional_kwargs, retries=self.retries
+            getattr(s3, method_name), kwargs=additional_kwargs, retries=self.retries
         )
 
     call_s3 = sync_wrapper(_call_s3)
