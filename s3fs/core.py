@@ -2465,12 +2465,18 @@ class S3FileSystem(AsyncFileSystem):
                 # special path to completely remove versioned bucket
                 await self._rm_versioned_bucket_contents(bucket)
         paths = await self._expand_path(path, recursive=recursive)
-        files = [p for p in paths if self.split_path(p)[1]]
-        dirs = [p for p in paths if not self.split_path(p)[1]]
-        # TODO: fails if more than one bucket in list
+        files_by_bucket = {}
+        dirs = []
+        for p in paths:
+            bucket, key, _ = self.split_path(p)
+            if key:
+                files_by_bucket.setdefault(bucket, []).append(p)
+            else:
+                dirs.append(p)
         out = await _run_coros_in_chunks(
             [
                 self._bulk_delete(files[i : i + 1000], **kwargs)
+                for files in files_by_bucket.values()
                 for i in range(0, len(files), 1000)
             ],
             batch_size=3,
