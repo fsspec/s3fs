@@ -9,6 +9,7 @@ Unreleased
 - Delete the requested object version in ``rm_file`` when the path includes one.
 - Only return versions of the requested key from ``object_version_info``, not of other keys sharing it as a prefix.
 - Use the part sizes of the requested source version in ETag-preserving copies.
+- Keep the source object's content headers and user metadata when ``cp_file`` copies it in parts (objects over 150 MiB, or ``preserve_etag=True``).
 
 - Return empty ``cat_file`` slices without issuing an S3 range request (#1064).
 - Resolve negative ``cat_file`` offsets against the size of the version being read, so crossed slices return no data instead of the whole object.
