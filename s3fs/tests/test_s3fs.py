@@ -4084,3 +4084,65 @@ def test_normal_ls_and_find_still_populate_dircache(s3):
     s3.ls(data_dir)
     assert data_dir in s3.dircache
     assert len(s3.dircache[data_dir]) == 2
+
+
+@pytest.mark.parametrize("selector", ["argument", "path", "latest"])
+@pytest.mark.parametrize("key", ["metadata-version", "metadata?literal"])
+@pytest.mark.parametrize("delete_latest", [False, True])
+def test_file_metadata_uses_opened_version(s3, selector, key, delete_latest):
+    fs = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    path = f"{versioned_bucket_name}/{key}"
+    first = fs.call_s3(
+        "put_object",
+        Bucket=versioned_bucket_name,
+        Key=key,
+        Body=b"old",
+        Metadata={"schema": "old"},
+    )["VersionId"]
+    if selector == "argument":
+        file = fs.open(path, version_id=first)
+    elif selector == "path":
+        file = fs.open(f"{path}?versionId={first}")
+    else:
+        file = fs.open(path)
+    with file:
+        fs.call_s3(
+            "put_object",
+            Bucket=versioned_bucket_name,
+            Key=key,
+            Body=b"new",
+            Metadata={"schema": "new"},
+        )
+        if delete_latest:
+            fs.call_s3("delete_object", Bucket=versioned_bucket_name, Key=key)
+        assert file.read() == b"old"
+        assert file.metadata() == {"schema": "old"}
+        assert file.metadata(refresh=True) == {"schema": "old"}
+        assert file.getxattr("schema") == "old"
+
+
+def test_file_metadata_explicit_request_version(s3):
+    fs = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    key = "metadata-request-version"
+    path = f"{versioned_bucket_name}/{key}"
+    first = fs.call_s3(
+        "put_object",
+        Bucket=versioned_bucket_name,
+        Key=key,
+        Body=b"old",
+        Metadata={"schema": "old"},
+    )["VersionId"]
+    second = fs.call_s3(
+        "put_object",
+        Bucket=versioned_bucket_name,
+        Key=key,
+        Body=b"new",
+        Metadata={"schema": "new"},
+    )["VersionId"]
+    with fs.open(path, version_id=first) as file:
+        assert file.metadata(VersionId=second) == {"schema": "new"}
+        assert file.getxattr("schema", VersionId=second) == "new"
