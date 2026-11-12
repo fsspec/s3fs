@@ -4,6 +4,7 @@ Changelog
 Unreleased
 ----------
 
+- Recognize expired reads by the S3 error code when the error message is missing or differs (#1053)
 - Preserve exclusive-create conditions and file options when committing empty files.
 - Forward per-call S3 request options through single-object and batched deletes.
 - Delete the requested object version in ``rm_file`` when the path includes one.
