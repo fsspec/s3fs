@@ -16,6 +16,7 @@ Unreleased
 - Preserve missing-version errors instead of falling back to a directory (#886)
 - Raise translated errors when S3 reports per-object failures for bulk deletes (#838)
 - Recognize readable directories with prefix-scoped S3 permissions (#1049)
+- Send part checksums when completing multipart uploads created with a ``ChecksumAlgorithm`` (#672)
 
 2026.9.0
 --------

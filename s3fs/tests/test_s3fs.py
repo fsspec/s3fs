@@ -457,6 +457,61 @@ def test_multi_checksum(s3):
     # assert "ChecksumSHA256" in FileHead
 
 
+@pytest.mark.parametrize("echo_algorithm", [True, False])
+@pytest.mark.parametrize("algorithm", ["SHA256", "CRC32"])
+@pytest.mark.parametrize("method", ["pipe_file", "put_file", "open"])
+def test_multipart_parts_carry_checksums(s3, tmpdir, algorithm, method, echo_algorithm):
+    # moto completes these uploads without part checksums, AWS rejects them
+    s3 = S3FileSystem(
+        anon=False,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        s3_additional_kwargs={"ChecksumAlgorithm": algorithm},
+        skip_instance_cache=True,
+    )
+    path = test_bucket_name + "/multipart-checksum"
+    data = os.urandom(12 * 2**20)
+    checksum = "Checksum" + algorithm
+    uploaded = []
+    completed = []
+
+    created = []
+
+    def record_create(parsed, **kwargs):
+        if not echo_algorithm:
+            # some S3-compatible servers don't echo the algorithm back
+            parsed.pop("ChecksumAlgorithm", None)
+        created.append(parsed.get("ChecksumAlgorithm"))
+
+    def record_part(parsed, **kwargs):
+        uploaded.append(parsed[checksum])
+
+    def record_complete(params, **kwargs):
+        completed.extend(params["MultipartUpload"]["Parts"])
+
+    s3.connect()
+    s3.s3.meta.events.register("after-call.s3.CreateMultipartUpload", record_create)
+    s3.s3.meta.events.register("after-call.s3.UploadPart", record_part)
+    s3.s3.meta.events.register(
+        "provide-client-params.s3.CompleteMultipartUpload", record_complete
+    )
+    if method == "pipe_file":
+        s3.pipe_file(path, data, chunksize=5 * 2**20)
+    elif method == "put_file":
+        local = str(tmpdir.join("data"))
+        with open(local, "wb") as f:
+            f.write(data)
+        s3.put_file(local, path, chunksize=5 * 2**20)
+    else:
+        with s3.open(path, "wb", block_size=5 * 2**20) as f:
+            for i in range(0, len(data), 4 * 2**20):
+                f.write(data[i : i + 4 * 2**20])
+
+    assert created == [algorithm if echo_algorithm else None]
+    assert len(completed) == len(uploaded) > 1
+    assert sorted(p.get(checksum) or "" for p in completed) == sorted(uploaded)
+    assert s3.cat(path) == data
+
+
 test_xattr_sample_metadata = {"testxattr": "1"}
 
 
