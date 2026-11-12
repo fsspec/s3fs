@@ -1410,7 +1410,7 @@ class S3FileSystem(AsyncFileSystem):
         for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
             results = await asyncio.gather(
                 *[
-                    _read_chunk(start, end)
+                    _error_wrapper(_read_chunk, args=(start, end), retries=self.retries)
                     for start, end in ranges[batch_start:batch_stop]
                 ]
             )
@@ -1646,7 +1646,9 @@ class S3FileSystem(AsyncFileSystem):
             for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
                 results = await asyncio.gather(
                     *[
-                        _download_chunk(start, end)
+                        _error_wrapper(
+                            _download_chunk, args=(start, end), retries=self.retries
+                        )
                         for start, end in ranges[batch_start:batch_stop]
                     ]
                 )
