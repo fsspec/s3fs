@@ -2197,32 +2197,61 @@ class S3FileSystem(AsyncFileSystem):
             "create_multipart_upload", kwargs, Bucket=bucket, Key=key
         )
         # TODO: Make this support versions?
-        out = await asyncio.gather(
-            *[
-                self._call_s3(
-                    "upload_part_copy",
-                    kwargs,
-                    Bucket=bucket,
-                    Key=key,
-                    UploadId=mpu["UploadId"],
-                    CopySource=f,
-                    PartNumber=i + 1,
+        tasks = []
+        try:
+            for i, f in enumerate(filelist):
+                tasks.append(
+                    asyncio.create_task(
+                        self._call_s3(
+                            "upload_part_copy",
+                            kwargs,
+                            Bucket=bucket,
+                            Key=key,
+                            UploadId=mpu["UploadId"],
+                            CopySource=f,
+                            PartNumber=i + 1,
+                        )
+                    )
                 )
-                for (i, f) in enumerate(filelist)
+            # Fail on the first copy error, then cancel and drain its siblings.
+            out = await asyncio.gather(*tasks)
+            parts = [
+                {"PartNumber": i + 1, "ETag": o["CopyPartResult"]["ETag"]}
+                for (i, o) in enumerate(out)
             ]
-        )
-        parts = [
-            {"PartNumber": i + 1, "ETag": o["CopyPartResult"]["ETag"]}
-            for (i, o) in enumerate(out)
-        ]
-        part_info = {"Parts": parts}
-        await self._call_s3(
-            "complete_multipart_upload",
-            Bucket=bucket,
-            Key=key,
-            UploadId=mpu["UploadId"],
-            MultipartUpload=part_info,
-        )
+            part_info = {"Parts": parts}
+            await self._call_s3(
+                "complete_multipart_upload",
+                Bucket=bucket,
+                Key=key,
+                UploadId=mpu["UploadId"],
+                MultipartUpload=part_info,
+            )
+        except BaseException:
+            # Do not abort while sibling part copies are still running.
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            try:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            except BaseException:
+                # Cancelling this gather raises even with return_exceptions=True.
+                # Stop best-effort cleanup and preserve the original merge error
+                # (or cancellation), rather than replacing it with cleanup failure.
+                pass
+            else:
+                try:
+                    await self._call_s3(
+                        "abort_multipart_upload",
+                        kwargs,
+                        Bucket=bucket,
+                        Key=key,
+                        UploadId=mpu["UploadId"],
+                    )
+                except BaseException:
+                    # Aborting is best effort; never hide the original error.
+                    pass
+            raise
         self.invalidate_cache(path)
 
     merge = sync_wrapper(_merge)
