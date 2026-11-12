@@ -4,6 +4,8 @@ Changelog
 Unreleased
 ----------
 
+- Preserve exact S3 version selectors when globbing paths, including versioned URL lists passed through fsspec.
+
 - Preserve exclusive-create conditions and file options when committing empty files.
 - Forward per-call S3 request options through single-object and batched deletes.
 - Delete the requested object version in ``rm_file`` when the path includes one.
