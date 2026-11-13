@@ -691,6 +691,85 @@ def test_isdir(s3):
     assert s3.isdir(test_bucket_name + "/nested/nested2/")
 
 
+@pytest.mark.parametrize(
+    "cached", [(), ("parent",), ("child",), ("parent", "child"), ("child", "parent")]
+)
+@pytest.mark.parametrize("suffix", ["", "/"])
+def test_file_and_directory_with_same_name(s3, cached, suffix):
+    parent = test_bucket_name + "/collision"
+    path = parent + "/prefix"
+    s3.pipe_file(path, b"object-data")
+    s3.pipe_file(path + "/file.txt", b"child-data")
+    checksum = s3.checksum(path)
+    for entry in cached:
+        s3.ls(parent if entry == "parent" else path)
+
+    for _ in range(2):
+        assert s3.isfile(path + suffix)
+        assert s3.isdir(path + suffix)
+        info = s3.info(path + suffix)
+        assert info["type"] == "file"
+        assert info["size"] == len(b"object-data")
+        assert s3.checksum(path + suffix) == checksum
+        with s3.open(path, "rb") as f:
+            assert f.read() == b"object-data"
+    assert s3.info(path, refresh=True)["type"] == "file"
+
+
+def test_info_with_cached_parent_and_children(s3, monkeypatch):
+    parent = test_bucket_name + "/collision"
+    path = parent + "/prefix"
+    s3.pipe_file(path, b"object-data")
+    s3.pipe_file(path + "/file.txt", b"child-data")
+    listing = s3.ls(parent, detail=True)
+    expected = next(f for f in listing if f["name"] == path and f["type"] == "file")
+    s3.ls(path)
+
+    async def unexpected_request(*args, **kwargs):
+        pytest.fail("Complete cached listings should not need another S3 request")
+
+    monkeypatch.setattr(s3, "_call_s3", unexpected_request)
+    assert s3.info(path) is expected
+    assert s3.isfile(path)
+    assert s3.isdir(path)
+
+
+@pytest.mark.parametrize("head_denied", [False, True])
+def test_info_with_cached_children(s3, monkeypatch, head_denied):
+    path = test_bucket_name + "/nested"
+    s3.ls(path)
+    call_s3 = s3._call_s3
+    requests = []
+
+    async def record_request(method, *args, **kwargs):
+        requests.append(method)
+        if head_denied and method == "head_object":
+            raise PermissionError("Object metadata is not accessible")
+        return await call_s3(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", record_request)
+    assert s3.info(path)["type"] == "directory"
+    assert requests == ["head_object"]
+
+
+def test_info_version_with_cached_children(s3):
+    s3 = S3FileSystem(version_aware=True, client_kwargs={"endpoint_url": endpoint_uri})
+    parent = versioned_bucket_name + "/collision"
+    path = parent + "/prefix"
+    s3.pipe_file(path, b"first")
+    first_version = s3.info(path)["VersionId"]
+    s3.pipe_file(path, b"second")
+    s3.pipe_file(path + "/file.txt", b"child-data")
+    s3.ls(parent)
+    s3.ls(path)
+
+    assert s3.info(path)["size"] == len(b"second")
+    assert s3.info(path, version_id=first_version)["size"] == len(b"first")
+    assert s3.info(f"{path}?versionId={first_version}")["VersionId"] == first_version
+    assert s3.cat_file(path, version_id=first_version) == b"first"
+    assert s3.isdir(path)
+
+
 def test_rm(s3):
     assert not s3.exists(a)
     s3.touch(a)
