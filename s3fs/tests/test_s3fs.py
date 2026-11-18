@@ -2118,6 +2118,38 @@ def test_object_version_info_ignores_prefixed_keys(s3):
     assert {version["Key"] for version in versions} == {"versioned_file/nested"}
 
 
+def test_object_version_iter_paginated_matches_info(s3, monkeypatch):
+    fs = S3FileSystem(
+        anon=False,
+        version_aware=True,
+        client_kwargs={"endpoint_url": endpoint_uri},
+        skip_instance_cache=True,
+    )
+    path = versioned_bucket_name + "/iterator_key"
+    fs.pipe(path, b"first")
+    fs.pipe(path, b"second")
+    fs.pipe(path + ".bak", b"sibling")
+    fs.pipe(path + "/nested", b"nested")
+    fs.rm(path)  # a delete marker must not appear among the object versions
+    expected = fs.object_version_info(path)
+    calls = []
+    original_call = fs._call_s3
+
+    async def record(method, *args, **kwargs):
+        if method == "list_object_versions":
+            calls.append((args, kwargs))
+        return await original_call(method, *args, **kwargs)
+
+    monkeypatch.setattr(fs, "_call_s3", record)
+    assert list(fs.object_version_iter(path, MaxKeys=1)) == expected
+    assert len(expected) == 2
+    assert len(calls) >= 2
+    assert all(args[0]["MaxKeys"] == 1 for args, _ in calls)
+    assert {v["Key"] for v in fs.object_version_iter(path + "/", MaxKeys=1)} == {
+        "iterator_key/nested"
+    }
+
+
 def test_list_versions_many(s3):
     # moto doesn't actually behave in the same way that s3 does here so this doesn't test
     # anything really in moto 1.2

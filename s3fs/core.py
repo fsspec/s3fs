@@ -1932,6 +1932,76 @@ class S3FileSystem(AsyncFileSystem):
 
     isdir = sync_wrapper(_isdir)
 
+    async def _object_version_pages(self, path, **kwargs):
+        if not self.version_aware:
+            raise ValueError(
+                "version specific functionality is disabled for "
+                "non-version aware filesystems"
+            )
+        bucket, key, _ = self.split_path(path)
+        exact = key and not key.endswith("/")
+        kwargs = kwargs.copy()
+        while True:
+            out = await self._call_s3(
+                "list_object_versions", kwargs, Bucket=bucket, Prefix=key
+            )
+            yield [v for v in out.get("Versions", []) if not exact or v["Key"] == key]
+            if not out["IsTruncated"]:
+                break
+            kwargs.update(
+                {
+                    "VersionIdMarker": out.get("NextVersionIdMarker", ""),
+                    "KeyMarker": out.get("NextKeyMarker", ""),
+                }
+            )
+
+    async def _object_version_iter(self, path, **kwargs):
+        pages = self._object_version_pages(path, **kwargs)
+        try:
+            async for page in pages:
+                for version in page:
+                    yield version
+        finally:
+            await pages.aclose()
+
+    def object_version_iter(self, path, **kwargs):
+        """Iterate over object versions without collecting every page in memory.
+
+        For an object path, return only versions of that exact key. A bucket
+        path or a path ending in ``/`` returns versions under that prefix.
+        Delete markers are not returned, matching ``object_version_info``.
+        Results retain the service's order. Additional keyword arguments are
+        passed to ``list_object_versions`` (for example, ``MaxKeys``).
+
+        Requests are made lazily, one page at a time, without prefetching.
+        Memory usage is proportional to a response page rather than the total
+        number of versions. Asynchronous callers can use
+        ``async for version in fs._object_version_iter(path)`` instead.
+        """
+        pages = self._object_version_pages(path, **kwargs)
+        pending = None
+
+        async def next_page():
+            nonlocal pending
+            pending = asyncio.create_task(pages.__anext__())
+            return await pending
+
+        async def close_pages():
+            if pending is not None and not pending.done():
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+            await pages.aclose()
+
+        try:
+            while True:
+                try:
+                    page = sync(self.loop, next_page)
+                except StopAsyncIteration:
+                    break
+                yield from page
+        finally:
+            sync(self.loop, close_pages)
+
     async def _object_version_info(self, path, **kwargs):
         if not self.version_aware:
             raise ValueError(
