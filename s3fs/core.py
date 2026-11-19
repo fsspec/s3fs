@@ -2756,6 +2756,8 @@ class S3File(AbstractBufferedFile):
 
         Metadata is cached unless `refresh=True`.
         """
+        if self.version_id is not None:
+            kwargs.setdefault("VersionId", self.version_id)
         return self.fs.metadata(self.path, refresh, **kwargs)
 
     def getxattr(self, xattr_name, **kwargs):
@@ -2767,6 +2769,8 @@ class S3File(AbstractBufferedFile):
         >>> mys3file.getxattr('attribute_1')  # doctest: +SKIP
         'value_1'
         """
+        if self.version_id is not None:
+            kwargs.setdefault("VersionId", self.version_id)
         return self.fs.getxattr(self.path, xattr_name, **kwargs)
 
     def setxattr(self, copy_kwargs=None, **kwargs):
