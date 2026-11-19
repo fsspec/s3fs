@@ -2942,13 +2942,44 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
         self.r = None
         self.loc = 0
         self.size = None
+        if mode == "rb":
+            self.closed = False
+
+    def _close_read_stream(self):
+        if self.closed:
+            return
+        self.closed = True
+        if self.r is not None:
+            self.r.close()
+
+    async def close(self):
+        if self.mode == "rb":
+            self._close_read_stream()
+        else:
+            await super().close()
+
+    def __del__(self):
+        if getattr(self, "mode", None) == "rb":
+            self._close_read_stream()
+        else:
+            super().__del__()
 
     async def read(self, length=-1):
+        if self.mode == "rb" and self.closed:
+            raise ValueError("I/O operation on closed file.")
         if self.r is None:
             bucket, key, gen = self.fs.split_path(self.path)
             r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
-            self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
             self.r = r["Body"]
+            if self.mode == "rb" and self.closed:
+                self.r.close()
+                raise ValueError("I/O operation on closed file.")
+            try:
+                self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
+            except (KeyError, TypeError, ValueError):
+                if self.mode == "rb":
+                    self._close_read_stream()
+                raise
         out = await self.r.read(length)
         self.loc += len(out)
         return out
