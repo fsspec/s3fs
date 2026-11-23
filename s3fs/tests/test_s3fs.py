@@ -691,6 +691,31 @@ def test_isdir(s3):
     assert s3.isdir(test_bucket_name + "/nested/nested2/")
 
 
+def test_isdir_lists_one_item_and_caches_nothing(s3, monkeypatch):
+    # https://github.com/fsspec/s3fs/issues/946
+    d = test_bucket_name + "/isdir-many"
+    for i in range(5):
+        s3.touch(f"{d}/f{i}")
+    s3.invalidate_cache()
+
+    listed = []
+    original = s3._call_s3
+
+    async def call_s3(method, *args, **kwargs):
+        if method == "list_objects_v2":
+            listed.append(kwargs.get("MaxKeys"))
+        return await original(method, *args, **kwargs)
+
+    monkeypatch.setattr(s3, "_call_s3", call_s3)
+    assert s3.isdir(d)
+    assert s3.isdir(test_bucket_name)
+    assert listed and all(n is not None for n in listed)
+    # a truncated listing must not stand in for the full directory
+    assert d not in s3.dircache
+    assert test_bucket_name not in s3.dircache
+    assert len(s3.ls(d)) == 5
+
+
 def test_rm(s3):
     assert not s3.exists(a)
     s3.touch(a)

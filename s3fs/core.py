@@ -862,9 +862,10 @@ class S3FileSystem(AsyncFileSystem):
         versions=False,
     ):
         bucket, key, _ = self.split_path(path)
-        # A caller-supplied prefix is a stem filter, so the listing is partial
-        # and must not be cached. Capture it before prefix is overwritten below.
-        partial = bool(prefix)
+        # A caller-supplied prefix is a stem filter, and max_items truncates the
+        # listing, so either makes it partial and it must not be cached. Capture
+        # this before prefix is overwritten below.
+        partial = bool(prefix) or max_items is not None
         if not prefix:
             prefix = ""
         if key:
@@ -1903,7 +1904,7 @@ class S3FileSystem(AsyncFileSystem):
             if path == "":
                 return True
             try:
-                out = await self._lsdir(path)
+                await self._lsdir(path, max_items=1)
                 return True
             except FileNotFoundError:
                 return False
@@ -1924,9 +1925,10 @@ class S3FileSystem(AsyncFileSystem):
                     return f["type"] == "directory"
             return False
 
-        # This only returns things within the path and NOT the path object itself
+        # This only returns things within the path and NOT the path object itself.
+        # One entry is enough to tell, so do not list the whole directory.
         try:
-            return bool(await self._lsdir(path))
+            return bool(await self._lsdir(path, max_items=1))
         except FileNotFoundError:
             return False
 
