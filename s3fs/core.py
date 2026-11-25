@@ -2353,6 +2353,8 @@ class S3FileSystem(AsyncFileSystem):
             the generated etag.
         """
         path1 = self._strip_protocol(path1)
+        if self.split_path(path2)[2]:
+            raise ValueError("Cannot copy to a versioned file!")
         bucket, key, vers = self.split_path(path1)
 
         info = await self._info(path1, bucket, key, version_id=vers)
@@ -2946,7 +2948,9 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
     async def read(self, length=-1):
         if self.r is None:
             bucket, key, gen = self.fs.split_path(self.path)
-            r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
+            r = await self.fs._call_s3(
+                "get_object", Bucket=bucket, Key=key, **version_id_kw(gen)
+            )
             self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
             self.r = r["Body"]
         out = await self.r.read(length)
