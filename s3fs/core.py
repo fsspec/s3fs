@@ -2353,6 +2353,8 @@ class S3FileSystem(AsyncFileSystem):
             the generated etag.
         """
         path1 = self._strip_protocol(path1)
+        if self.split_path(path2)[2]:
+            raise ValueError("Cannot copy to a versioned file!")
         bucket, key, vers = self.split_path(path1)
 
         info = await self._info(path1, bucket, key, version_id=vers)

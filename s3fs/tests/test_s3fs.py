@@ -3019,6 +3019,33 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     s3.rm(test_file1)
 
 
+@pytest.mark.parametrize("copy_mode", ["basic", "managed", "preserve_etag"])
+def test_copy_rejects_versioned_destination(s3, monkeypatch, copy_mode):
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    source = versioned_bucket_name + "/source"
+    target = versioned_bucket_name + "/target"
+    data = b"a" * (10 * 2**20)
+    s3.pipe_file(source, data, chunksize=5 * 2**20)
+    s3.pipe_file(target, b"original")
+    version_id = s3.info(target)["VersionId"]
+    if copy_mode == "managed":
+        monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
+    preserve_etag = copy_mode == "preserve_etag"
+
+    with pytest.raises(ValueError, match="Cannot copy to a versioned file"):
+        s3.cp_file(
+            source, f"{target}?versionId={version_id}", preserve_etag=preserve_etag
+        )
+
+    assert s3.cat_file(target) == b"original"
+    assert len(s3.object_version_info(target)) == 1
+    assert not s3.list_multipart_uploads(versioned_bucket_name)
+    s3.cp_file(source, target, preserve_etag=preserve_etag)
+    assert s3.cat_file(target) == data
+
+
 def test_etag_preserving_copy_of_older_version(s3):
     s3 = S3FileSystem(
         anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
