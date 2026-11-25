@@ -1329,6 +1329,16 @@ class S3FileSystem(AsyncFileSystem):
                 and (start < 0) == (end < 0)
             ):
                 return b""
+            if (start is not None and start < 0 and end is not None) or (
+                end is not None and end < 0
+            ):
+                # Resolve negative offsets like a slice, against the size of the
+                # version being read. An empty or crossed range can't be sent:
+                # S3 ignores an invalid Range and returns the whole object.
+                size = (await self._info(path, version_id=version_id or vers))["size"]
+                start, end, _ = slice(start, end).indices(size)
+                if start >= end:
+                    return b""
             head = {"Range": await self._process_limits(path, start, end)}
         else:
             head = {}
@@ -1400,7 +1410,7 @@ class S3FileSystem(AsyncFileSystem):
         for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
             results = await asyncio.gather(
                 *[
-                    _read_chunk(start, end)
+                    _error_wrapper(_read_chunk, args=(start, end), retries=self.retries)
                     for start, end in ranges[batch_start:batch_stop]
                 ]
             )
@@ -1636,7 +1646,9 @@ class S3FileSystem(AsyncFileSystem):
             for batch_start, batch_stop in zip(inds[:-1], inds[1:]):
                 results = await asyncio.gather(
                     *[
-                        _download_chunk(start, end)
+                        _error_wrapper(
+                            _download_chunk, args=(start, end), retries=self.retries
+                        )
                         for start, end in ranges[batch_start:batch_stop]
                     ]
                 )
@@ -2126,7 +2138,7 @@ class S3FileSystem(AsyncFileSystem):
         if recursive:
             allfiles = await self._find(path, withdirs=False)
             await asyncio.gather(
-                *[self._chmod(p, acl, recursive=False) for p in allfiles]
+                *[self._chmod(p, acl, recursive=False, **kwargs) for p in allfiles]
             )
         elif key:
             if acl not in key_acls:
@@ -2251,7 +2263,13 @@ class S3FileSystem(AsyncFileSystem):
         )
         part_infos = await asyncio.gather(
             *[
-                self._call_s3("head_object", Bucket=bucket1, Key=key1, PartNumber=i)
+                self._call_s3(
+                    "head_object",
+                    Bucket=bucket1,
+                    Key=key1,
+                    PartNumber=i,
+                    **version_id_kw(version1),
+                )
                 for i in range(1, total_parts + 1)
             ]
         )
@@ -2337,6 +2355,8 @@ class S3FileSystem(AsyncFileSystem):
             the generated etag.
         """
         path1 = self._strip_protocol(path1)
+        if self.split_path(path2)[2]:
+            raise ValueError("Cannot copy to a versioned file!")
         bucket, key, vers = self.split_path(path1)
 
         info = await self._info(path1, bucket, key, version_id=vers)
@@ -2930,7 +2950,9 @@ class S3AsyncStreamedFile(AbstractAsyncStreamedFile):
     async def read(self, length=-1):
         if self.r is None:
             bucket, key, gen = self.fs.split_path(self.path)
-            r = await self.fs._call_s3("get_object", Bucket=bucket, Key=key)
+            r = await self.fs._call_s3(
+                "get_object", Bucket=bucket, Key=key, **version_id_kw(gen)
+            )
             self.size = int(r["ResponseMetadata"]["HTTPHeaders"]["content-length"])
             self.r = r["Body"]
         out = await self.r.read(length)

@@ -2,7 +2,7 @@ name: s3fs
 channels:
   - defaults
 dependencies:
-  - python= 3.10
+  - python= 3.11
   - botocore
   - docutils<0.17
   - sphinx

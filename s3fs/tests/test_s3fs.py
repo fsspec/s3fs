@@ -1410,6 +1410,51 @@ def test_parallel_download_closes_bodies(tmp_path, monkeypatch, method, error):
     assert all(body.closed for body in bodies)
 
 
+@pytest.mark.parametrize("method", ["get_file", "cat_file"])
+def test_parallel_download_retries_interrupted_read(tmp_path, monkeypatch, method):
+    data = b"parallel download"
+    bodies = []
+    ranges = []
+    reads = []
+
+    class Body(io.BytesIO):
+        async def read(self, *args):
+            reads.append(self)
+            if len(reads) == 1:
+                raise TimeoutError("interrupted read")
+            return super().read(*args)
+
+    async def get_object(method, **kwargs):
+        assert method == "get_object"
+        if "Range" in kwargs:
+            ranges.append(kwargs["Range"])
+            start, end = map(int, kwargs["Range"].removeprefix("bytes=").split("-"))
+            body = Body(data[start : end + 1])
+        else:
+            body = Body(data)
+        bodies.append(body)
+        return {"Body": body, "ContentLength": len(body.getvalue())}
+
+    fs = S3FileSystem(asynchronous=True, skip_instance_cache=True)
+    monkeypatch.setattr(fs, "_call_s3", get_object)
+    destination = tmp_path / "download"
+
+    async def size(path):
+        return len(data)
+
+    monkeypatch.setattr(fs, "_size", size)
+    if method == "get_file":
+        download = fs._get_file(
+            "test/download", destination, chunksize=10, max_concurrency=2
+        )
+    else:
+        download = fs._cat_file("test/download", chunksize=10, max_concurrency=2)
+    result = asyncio.run(download)
+    assert (destination.read_bytes() if method == "get_file" else result) == data
+    assert ranges == ["bytes=0-9", "bytes=10-16", "bytes=0-9"]
+    assert all(body.closed for body in bodies)
+
+
 @pytest.mark.parametrize("size", [2**10, 10 * 2**20])
 def test_put_file_with_callback(s3, tmpdir, size):
     test_file = str(tmpdir.join("test.json"))
@@ -2683,6 +2728,34 @@ def test_cat_ranges(s3):
     assert s3.cat_file(fn, start=-5, end=len(data) - 1) == data[-5:-1]
 
 
+@pytest.mark.parametrize(
+    "start,end", [(8, -5), (20, -5), (-1, 2), (-30, 5), (5, -30), (-30, -25)]
+)
+def test_cat_file_mixed_sign_range(s3, start, end):
+    # Bounds of different signs, or a negative bound past the start of the file,
+    # behave like a slice rather than returning the whole object
+    data = b"a string to select from"
+    fn = test_bucket_name + "/parts"
+    s3.pipe(fn, data)
+    assert s3.cat_file(fn, start=start, end=end) == data[start:end]
+
+
+def test_cat_file_negative_range_of_version(s3):
+    fn = versioned_bucket_name + "/versioned_range"
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    data = b"0123456789"
+    with s3.open(fn, "wb") as fo:
+        fo.write(data)
+    first_version = fo.version_id
+    s3.pipe(fn, b"abcd")
+
+    # Negative offsets count from the end of the requested version
+    assert s3.cat_file(fn, version_id=first_version, start=-3, end=-1) == b"78"
+    assert s3.cat_file(fn, version_id=first_version, start=2, end=-2) == data[2:-2]
+
+
 def test_async_s3_old(s3):
     async def _():
         s3 = S3FileSystem(
@@ -2997,6 +3070,51 @@ def test_s3fs_etag_preserving_multipart_copy(monkeypatch, s3):
     assert file_1["ETag"] == file_2["ETag"]
 
     s3.rm(test_file1)
+
+
+@pytest.mark.parametrize("copy_mode", ["basic", "managed", "preserve_etag"])
+def test_copy_rejects_versioned_destination(s3, monkeypatch, copy_mode):
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    source = versioned_bucket_name + "/source"
+    target = versioned_bucket_name + "/target"
+    data = b"a" * (10 * 2**20)
+    s3.pipe_file(source, data, chunksize=5 * 2**20)
+    s3.pipe_file(target, b"original")
+    version_id = s3.info(target)["VersionId"]
+    if copy_mode == "managed":
+        monkeypatch.setattr(s3fs.core, "MANAGED_COPY_THRESHOLD", 5 * 2**20)
+    preserve_etag = copy_mode == "preserve_etag"
+
+    with pytest.raises(ValueError, match="Cannot copy to a versioned file"):
+        s3.cp_file(
+            source, f"{target}?versionId={version_id}", preserve_etag=preserve_etag
+        )
+
+    assert s3.cat_file(target) == b"original"
+    assert len(s3.object_version_info(target)) == 1
+    assert not s3.list_multipart_uploads(versioned_bucket_name)
+    s3.cp_file(source, target, preserve_etag=preserve_etag)
+    assert s3.cat_file(target) == data
+
+
+def test_etag_preserving_copy_of_older_version(s3):
+    s3 = S3FileSystem(
+        anon=False, version_aware=True, client_kwargs={"endpoint_url": endpoint_uri}
+    )
+    source = versioned_bucket_name + "/multipart-source"
+    target = versioned_bucket_name + "/multipart-target"
+    data = b"a" * (12 * 2**20)
+    s3.pipe_file(source, data, chunksize=6 * 2**20)
+    first = s3.info(source)
+    # the latest version has the same number of parts, but smaller ones
+    s3.pipe_file(source, b"b" * (10 * 2**20), chunksize=5 * 2**20)
+
+    s3.cp_file(f"{source}?versionId={first['VersionId']}", target, preserve_etag=True)
+
+    assert s3.cat_file(target) == data
+    assert s3.info(target)["ETag"] == first["ETag"]
 
 
 @pytest.mark.parametrize("preserve_etag", [False, True])

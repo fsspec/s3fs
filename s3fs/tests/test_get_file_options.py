@@ -135,3 +135,48 @@ def test_get_file_rejects_partial_object_options(
         )
     assert not calls
     assert target.read_bytes() == b"keep existing data"
+
+
+@pytest.mark.parametrize("version_id", [None, "older-version", "null"])
+def test_async_stream_reads_requested_version(version_id):
+    fs = S3FileSystem(asynchronous=True, version_aware=True, skip_instance_cache=True)
+    versions = {
+        None: b"latest contents",
+        "older-version": b"old contents",
+        "null": b"null contents",
+    }
+    calls = []
+    bodies = []
+
+    async def call_s3(method, **kwargs):
+        assert method == "get_object"
+        assert kwargs["Bucket"] == "bucket"
+        assert kwargs["Key"] == "key"
+        calls.append(kwargs)
+        data = versions[kwargs.get("VersionId")]
+        body = Body(data)
+        bodies.append(body)
+        return {
+            "Body": body,
+            "ResponseMetadata": {"HTTPHeaders": {"content-length": str(len(data))}},
+        }
+
+    fs._call_s3 = call_s3
+
+    async def read_stream():
+        path = "s3://bucket/key"
+        if version_id is not None:
+            path += "?versionId=" + version_id
+        stream = await fs.open_async(path, mode="rb")
+        result = await stream.read(2) + await stream.read()
+        assert stream.size == len(versions[version_id])
+        assert stream.tell() == len(result)
+        return result
+
+    try:
+        assert asyncio.run(read_stream()) == versions[version_id]
+        assert len(calls) == 1
+        assert ("VersionId" in calls[0]) == (version_id is not None)
+    finally:
+        for body in bodies:
+            body.close()
