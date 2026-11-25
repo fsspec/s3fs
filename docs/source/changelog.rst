@@ -4,6 +4,7 @@ Changelog
 Unreleased
 ----------
 
+- Preserve per-call request options when recursively changing object ACLs.
 - Honor object version selectors in async streamed reads.
 
 - Preserve exclusive-create conditions and file options when committing empty files.
