@@ -4,6 +4,7 @@ Changelog
 Unreleased
 ----------
 
+- Accept ``s3://`` URLs and trailing slashes for the bucket in ``rmdir``, and ``s3://`` URLs for the source files in ``merge``.
 - Preserve per-call request options when recursively changing object ACLs.
 - Honor object version selectors in async streamed reads.
 
