@@ -6,6 +6,7 @@ API
 .. autosummary::
    S3FileSystem
    S3FileSystem.cat
+   S3FileSystem.checksum
    S3FileSystem.du
    S3FileSystem.exists
    S3FileSystem.find
