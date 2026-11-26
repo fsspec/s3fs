@@ -1882,12 +1882,16 @@ class S3FileSystem(AsyncFileSystem):
             raise ValueError("Failed to list path %r: %s" % (path, e))
 
     async def _checksum(self, path, refresh=False):
-        """
-        Unique value for current version of file
+        """Return a change token for an object or directory.
 
-        If the checksum is the same from one moment to another, the contents
-        are guaranteed to be the same. If the checksum changes, the contents
-        *might* have changed.
+        For an object this is its S3 ETag's hexadecimal prefix converted to
+        an integer, without any multipart part-count suffix. It is not a
+        portable content checksum: the same bytes uploaded with different
+        multipart boundaries may produce different tokens, and matching
+        tokens do not prove that two objects have identical bytes. To compare
+        content independently of how it was uploaded, hash the object bytes.
+
+        For a directory this token is derived from its metadata.
 
         Parameters
         ----------
