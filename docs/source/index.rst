@@ -329,6 +329,27 @@ For an OVH s3-compatible storage in the ``GRA`` zone:
       }
    )
 
+Since botocore 1.36, requests carry CRC-based integrity checksums by default.
+Some S3 compatible stores, often older deployments, do not support these and
+fail with errors such as ``MissingContentLength`` or
+``XAmzContentSHA256Mismatch`` (see `issue 931
+<https://github.com/fsspec/s3fs/issues/931>`__). In that case, only send and
+validate checksums when an operation requires them:
+
+.. code-block:: python
+
+   >>> s3 = s3fs.S3FileSystem(
+      endpoint_url='https://...',
+      config_kwargs={
+         'request_checksum_calculation': 'when_required',
+         'response_checksum_validation': 'when_required',
+      }
+   )
+
+The same settings can be applied through the ``AWS_REQUEST_CHECKSUM_CALCULATION``
+and ``AWS_RESPONSE_CHECKSUM_VALIDATION`` environment variables, which also covers
+libraries that create the filesystem for you.
+
 
 .. _MinIO: https://min.io
 .. _Ceph Object Gateway: https://docs.ceph.com/docs/master/radosgw/
