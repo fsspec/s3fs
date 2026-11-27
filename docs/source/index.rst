@@ -91,22 +91,22 @@ Async
 -----
 
 ``s3fs`` is implemented using ``aiobotocore``, and offers async functionality.
-A number of methods of :py:class:`.S3FileSystem` are ``async``, for for each of these,
-there is also a synchronous version with the same name and lack of a ``_``
-prefix.
+A number of methods of :py:class:`.S3FileSystem` are ``async``. Their synchronous
+counterparts omit the leading underscore. For example, ``ls`` wraps ``_ls``.
 
-If you wish to call ``s3fs`` from async code, then you should pass
-``asynchronous=True, loop=`` to the constructor (the latter is optional,
-if you wish to use both async and sync methods). You must also explicitly
-await the client creation before making any S3 call.
+To call ``s3fs`` from async code, create the filesystem with
+``asynchronous=True`` inside a coroutine. Use ``await s3.set_session()`` to
+get the S3 client so you can close it when the filesystem is no longer needed.
 
 .. code-block:: python
 
     async def run_program():
         s3 = S3FileSystem(..., asynchronous=True)
-        session = await s3.set_session()
-        ...  # perform work
-        await session.close()
+        client = await s3.set_session()
+        try:
+            ...  # await S3 operations
+        finally:
+            await client.close()
 
     asyncio.run(run_program())  # or call from your async code
 
@@ -116,6 +116,43 @@ hidden behind a synchronisation layer, so are designed to be called
 from normal code. If you are *not*
 using async-style programming, you do not need to know about how this
 works, but you might find the implementation interesting.
+
+Using s3fs with FastAPI
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Create the filesystem in the application's `lifespan`_ so that requests
+reuse the same client on the application's event loop. Set
+``skip_instance_cache=True`` so each lifespan owns its filesystem and can
+close its client at shutdown. Await the async methods in ``async def`` routes
+to let the event loop handle other requests while S3 operations are pending.
+
+.. code-block:: python
+
+    from contextlib import asynccontextmanager
+
+    from fastapi import FastAPI, Request
+    from s3fs import S3FileSystem
+
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        fs = S3FileSystem(asynchronous=True, skip_instance_cache=True)
+        client = await fs.set_session()
+        try:
+            app.state.s3 = fs
+            yield
+        finally:
+            await client.close()
+
+
+    app = FastAPI(lifespan=lifespan)
+
+
+    @app.get("/objects")
+    async def list_objects(request: Request):
+        return await request.app.state.s3._ls("my-bucket/prefix")
+
+.. _lifespan: https://fastapi.tiangolo.com/advanced/events/
 
 
 Multiprocessing
