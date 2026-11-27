@@ -331,10 +331,9 @@ For an OVH s3-compatible storage in the ``GRA`` zone:
 
 Since botocore 1.36, requests carry CRC-based integrity checksums by default.
 Some S3 compatible stores, often older deployments, do not support these and
-fail with errors such as ``MissingContentLength`` or
-``XAmzContentSHA256Mismatch`` (see `issue 931
-<https://github.com/fsspec/s3fs/issues/931>`__). In that case, only send and
-validate checksums when an operation requires them:
+fail with errors such as ``MissingContentLength`` (see `this report in issue 931
+<https://github.com/fsspec/s3fs/issues/931#issuecomment-2615461879>`__). In that
+case, only send and validate checksums when an operation requires them:
 
 .. code-block:: python
 
