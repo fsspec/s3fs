@@ -877,7 +877,8 @@ class S3FileSystem(AsyncFileSystem):
         if not prefix:
             prefix = ""
         if key:
-            prefix = key.lstrip("/") + "/" + prefix
+            # Leading slashes are part of the S3 object key.
+            prefix = key + "/" + prefix
         if path not in self.dircache or refresh or not delimiter or versions or partial:
             try:
                 logger.debug("Get directory listing page for %s" % path)

@@ -3283,6 +3283,17 @@ def test_leading_forward_slash(s3):
     assert s3.exists("s3://" + test_bucket_name + "/some/file")
 
 
+@pytest.mark.parametrize("key_prefix", ["/", "//"])
+def test_ls_directory_with_leading_slashes_in_key(s3, key_prefix):
+    regular_path = f"{test_bucket_name}/test_path"
+    slash_path = f"{test_bucket_name}/{key_prefix}test_path"
+    s3.touch(f"{regular_path}/other_dir/data.txt")
+    s3.touch(f"{slash_path}/dir1/data.txt")
+
+    assert s3.ls(f"s3://{slash_path}/", detail=False) == [f"{slash_path}/dir1"]
+    assert s3.ls(regular_path, detail=False) == [f"{regular_path}/other_dir"]
+
+
 def test_lsdir(s3):
     # https://github.com/fsspec/s3fs/issues/475
     s3.find(test_bucket_name)
